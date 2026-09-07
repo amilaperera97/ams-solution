@@ -1,0 +1,75 @@
+package com.example.certplatform.infrastructure.persistence.repository;
+
+import com.example.certplatform.application.port.ProviderRepositoryPort;
+import com.example.certplatform.domain.model.Provider;
+import com.example.certplatform.infrastructure.persistence.entity.ProviderEntity;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Component
+public class ProviderRepositoryAdapter implements ProviderRepositoryPort {
+
+    private final JpaProviderRepository jpaRepository;
+
+    public ProviderRepositoryAdapter(JpaProviderRepository jpaRepository) {
+        this.jpaRepository = jpaRepository;
+    }
+
+    @Override
+    public Provider save(Provider provider) {
+        ProviderEntity entity = toEntity(provider);
+        ProviderEntity savedEntity = jpaRepository.save(entity);
+        return toDomain(savedEntity);
+    }
+
+    @Override
+    public Optional<Provider> findById(String id) {
+        return jpaRepository.findById(id).map(this::toDomain);
+    }
+
+    @Override
+    public List<Provider> findByOrganisationId(String organisationId) {
+        return jpaRepository.findByOrganisationId(organisationId).stream()
+                .map(this::toDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteById(String id) {
+        jpaRepository.deleteById(id);
+    }
+
+    @Override
+    public long count() {
+        return jpaRepository.count();
+    }
+
+    private ProviderEntity toEntity(Provider domain) {
+        if (domain == null) return null;
+        ProviderEntity entity = new ProviderEntity();
+        entity.setId(domain.getId());
+        entity.setName(domain.getName());
+        entity.setOrganisationId(domain.getOrganisationId());
+        entity.setType(domain.getType());
+        entity.setStatus(domain.getStatus());
+        entity.setCreatedAt(domain.getCreatedAt());
+        entity.setUpdatedAt(domain.getUpdatedAt());
+        return entity;
+    }
+
+    private Provider toDomain(ProviderEntity entity) {
+        if (entity == null) return null;
+        return new Provider(
+                entity.getId(),
+                entity.getName(),
+                entity.getOrganisationId(),
+                entity.getType(),
+                entity.getStatus(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
+    }
+}

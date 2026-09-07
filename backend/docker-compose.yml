@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: certplatform-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    volumes:
+      - certplatform-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  certplatform-data:
+    name: certplatform-data

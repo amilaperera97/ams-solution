@@ -1,0 +1,5 @@
+provider,environment,account_name,account_id,region,auth_type,role_arn,external_id,client_id,tenant_id,subscription_id,project_id,enabled
+AWS,DEV,dev-account-01,111111111111,eu-west-2,IAM_ROLE,arn:aws:iam::111111111111:role/CertificateDiscoveryRole,ext-dev-01,,,,,true
+AWS,PROD,prod-account-01,222222222222,eu-west-2,IAM_ROLE,arn:aws:iam::222222222222:role/CertificateDiscoveryRole,ext-prod-01,,,,,true
+Azure,PROD,prod-azure-01,,uksouth,SERVICE_PRINCIPAL,,,client-001,tenant-001,subscription-001,,true
+GCP,DEV,dev-gcp-01,,,SERVICE_ACCOUNT,,,,,,project-dev-01,true

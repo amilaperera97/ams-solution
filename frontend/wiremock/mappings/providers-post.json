@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "/api/providers"
+  },
+  "response": {
+    "status": 201,
+    "bodyFileName": "provider-created.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "request": {
+    "method": "DELETE",
+    "urlPattern": "/api/providers/[^/]+"
+  },
+  "response": {
+    "status": 204
+  }
+}

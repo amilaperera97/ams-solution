@@ -1,0 +1,12 @@
+{
+  "providers": 3,
+  "environments": 4,
+  "accounts": 25,
+  "certificates": 120,
+  "health": {
+    "expired": 9,
+    "critical": 3,
+    "expiringSoon": 9,
+    "healthy": 99
+  }
+}

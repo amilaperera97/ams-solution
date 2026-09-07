@@ -1,0 +1,29 @@
+[
+  {
+    "id": "aws-provider-001",
+    "type": "AWS",
+    "name": "AWS Production",
+    "status": "Connected",
+    "accountsCount": 12,
+    "environmentsCount": 4,
+    "certificatesCount": 820
+  },
+  {
+    "id": "azure-provider-001",
+    "type": "Azure",
+    "name": "Azure Corp",
+    "status": "Connected",
+    "accountsCount": 8,
+    "environmentsCount": 2,
+    "certificatesCount": 180
+  },
+  {
+    "id": "gcp-provider-001",
+    "type": "GCP",
+    "name": "GCP Main",
+    "status": "Warning",
+    "accountsCount": 5,
+    "environmentsCount": 2,
+    "certificatesCount": 70
+  }
+]

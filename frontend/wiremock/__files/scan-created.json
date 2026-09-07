@@ -1,0 +1,7 @@
+{
+  "id": "scan-mock",
+  "name": "Mock Scan",
+  "status": "Queued",
+  "startTime": null,
+  "certificatesFound": 0
+}

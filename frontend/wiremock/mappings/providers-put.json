@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "PUT",
+    "urlPattern": "/api/providers/[^/]+"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "provider-created.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

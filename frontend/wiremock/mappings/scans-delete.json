@@ -1,0 +1,9 @@
+{
+  "request": {
+    "method": "DELETE",
+    "urlPattern": "/api/scans/.*"
+  },
+  "response": {
+    "status": 204
+  }
+}

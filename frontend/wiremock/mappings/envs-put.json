@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "PUT",
+    "urlPattern": "/api/environments/[^/]+"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "env-created.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

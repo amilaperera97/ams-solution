@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "PUT",
+    "urlPattern": "/api/scans/.*"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "scan-created.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "aws-prod-001",
+    "name": "aws-prod-main",
+    "provider": "AWS",
+    "environment": "PROD",
+    "status": "Active",
+    "certificatesCount": 450
+  },
+  {
+    "id": "aws-prod-002",
+    "name": "aws-prod-db",
+    "provider": "AWS",
+    "environment": "PROD",
+    "status": "Active",
+    "certificatesCount": 120
+  },
+  {
+    "id": "azure-prod-001",
+    "name": "azure-prod-eu",
+    "provider": "Azure",
+    "environment": "PROD",
+    "status": "Active",
+    "certificatesCount": 270
+  },
+  {
+    "id": "gcp-qa-001",
+    "name": "gcp-qa-sandbox",
+    "provider": "GCP",
+    "environment": "QA",
+    "status": "Suspended",
+    "certificatesCount": 80
+  }
+]

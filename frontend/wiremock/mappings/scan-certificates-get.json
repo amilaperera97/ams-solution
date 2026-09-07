@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/api/scans/.*/certificates"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "scan-certificates.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

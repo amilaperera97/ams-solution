@@ -1,0 +1,100 @@
+[
+  {
+    "id": "scan-001",
+    "name": "Production Full Certificate Scan",
+    "provider": "AWS",
+    "environment": "PROD",
+    "accountCount": 2,
+    "certificatesFound": 184,
+    "status": "Completed",
+    "startTime": "2026-08-15T07:30:00Z",
+    "completedAt": "2026-08-15T07:34:21Z",
+    "durationSeconds": 261
+  },
+  {
+    "id": "scan-002",
+    "name": "Production ALB Certificate Scan",
+    "provider": "AWS",
+    "environment": "PROD",
+    "accountCount": 1,
+    "certificatesFound": 48,
+    "status": "Completed"
+  },
+  {
+    "id": "scan-003",
+    "name": "Azure Production Scan",
+    "provider": "Azure",
+    "environment": "PROD",
+    "accountCount": 2,
+    "certificatesFound": 76,
+    "status": "Completed"
+  },
+  {
+    "id": "scan-004",
+    "name": "Development Certificate Scan",
+    "provider": "AWS",
+    "environment": "DEV",
+    "accountCount": 2,
+    "certificatesFound": 32,
+    "status": "Completed"
+  },
+  {
+    "id": "scan-005",
+    "name": "QA Certificate Scan",
+    "provider": "AWS",
+    "environment": "QA",
+    "accountCount": 1,
+    "certificatesFound": 27,
+    "status": "Completed"
+  },
+  {
+    "id": "scan-006",
+    "name": "Full Organisation Scan",
+    "provider": "All",
+    "environment": "All",
+    "accountCount": 8,
+    "certificatesFound": 427,
+    "status": "Completed"
+  },
+  {
+    "id": "scan-007",
+    "name": "Staging Scan",
+    "provider": "AWS",
+    "environment": "STAGING",
+    "accountCount": 1,
+    "certificatesFound": 54,
+    "status": "Completed"
+  },
+  {
+    "id": "scan-008",
+    "name": "Failed Production Scan",
+    "provider": "AWS",
+    "environment": "PROD",
+    "accountCount": 2,
+    "certificatesFound": 0,
+    "status": "Failed",
+    "failureReason": "Unable to connect to Production Account 2."
+  },
+  {
+    "id": "scan-009",
+    "name": "Partial Organisation Scan",
+    "provider": "All",
+    "environment": "All",
+    "accountCount": 8,
+    "certificatesFound": 319,
+    "status": "Partial Success",
+    "successfulAccounts": 6,
+    "failedAccounts": 2
+  },
+  {
+    "id": "scan-010",
+    "name": "Current Production Scan",
+    "provider": "AWS",
+    "environment": "PROD",
+    "accountCount": 2,
+    "certificatesFound": 91,
+    "status": "In Progress",
+    "progress": 62,
+    "completedAccounts": 1
+  }
+]

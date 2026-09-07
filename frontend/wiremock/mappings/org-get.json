@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/api/organisation"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "organization.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

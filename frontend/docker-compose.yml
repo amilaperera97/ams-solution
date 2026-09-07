@@ -1,0 +1,11 @@
+services:
+  wiremock:
+    image: wiremock/wiremock:3.8.0
+    container_name: certificate-discovery-wiremock
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./wiremock:/home/wiremock
+    command:
+      - --global-response-templating
+      - --disable-gzip

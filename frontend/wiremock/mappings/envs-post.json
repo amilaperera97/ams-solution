@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "/api/environments"
+  },
+  "response": {
+    "status": 201,
+    "bodyFileName": "env-created.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

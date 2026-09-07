@@ -1,0 +1,8 @@
+{
+  "id": "acc-mock",
+  "name": "Mock Account",
+  "provider": "AWS",
+  "environment": "DEV",
+  "status": "Active",
+  "certificatesCount": 0
+}

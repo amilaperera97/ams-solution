@@ -1,0 +1,74 @@
+{
+  "scanId": "scan-001",
+  "total": 184,
+  "items": [
+    {
+      "id": "cert-001",
+      "certificateId": "cert-001",
+      "domain": "api.example.com",
+      "provider": "AWS",
+      "environment": "PROD",
+      "accountName": "Production Account UK",
+      "accountId": "123456789012",
+      "region": "eu-west-2",
+      "service": "ALB",
+      "resource": "prod-api-alb",
+      "status": "ACTIVE",
+      "issuedDate": "2026-06-15",
+      "expiryDate": "2026-09-15",
+      "issuer": "Amazon RSA 2048 M02",
+      "algorithm": "RSA 2048",
+      "autoRenewal": true,
+      "lastScanned": "2026-08-15T08:34:21Z",
+      "sans": [
+        "api.example.com",
+        "api.internal.example.com"
+      ]
+    },
+    {
+      "id": "cert-002",
+      "certificateId": "cert-002",
+      "domain": "www.example.com",
+      "provider": "AWS",
+      "environment": "PROD",
+      "accountName": "Production Account UK",
+      "accountId": "123456789012",
+      "region": "eu-west-2",
+      "service": "CloudFront",
+      "resource": "prod-cdn",
+      "status": "ACTIVE",
+      "issuedDate": "2025-10-21",
+      "expiryDate": "2026-10-21",
+      "issuer": "Amazon RSA 2048 M02",
+      "algorithm": "RSA 2048",
+      "autoRenewal": true,
+      "lastScanned": "2026-08-15T08:34:21Z",
+      "sans": [
+        "www.example.com",
+        "example.com"
+      ]
+    },
+    {
+      "id": "cert-003",
+      "certificateId": "cert-003",
+      "domain": "payments.example.com",
+      "provider": "AWS",
+      "environment": "PROD",
+      "accountName": "Production Shared",
+      "accountId": "678901234567",
+      "region": "eu-west-1",
+      "service": "ALB",
+      "resource": "prod-payments-alb",
+      "status": "EXPIRING SOON",
+      "issuedDate": "2025-09-05",
+      "expiryDate": "2026-09-05",
+      "issuer": "Let's Encrypt Authority X3",
+      "algorithm": "RSA 4096",
+      "autoRenewal": false,
+      "lastScanned": "2026-08-15T08:34:21Z",
+      "sans": [
+        "payments.example.com"
+      ]
+    }
+  ]
+}

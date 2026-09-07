@@ -1,0 +1,7 @@
+{
+  "id": "prov-mock",
+  "name": "Mock Provider",
+  "type": "AWS",
+  "status": "Pending",
+  "lastSync": null
+}

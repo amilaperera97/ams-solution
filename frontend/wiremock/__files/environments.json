@@ -1,0 +1,26 @@
+[
+  {
+    "id": "env-prod",
+    "name": "PROD",
+    "accountsCount": 15,
+    "certificatesCount": 840
+  },
+  {
+    "id": "env-staging",
+    "name": "STAGING",
+    "accountsCount": 5,
+    "certificatesCount": 120
+  },
+  {
+    "id": "env-qa",
+    "name": "QA",
+    "accountsCount": 3,
+    "certificatesCount": 80
+  },
+  {
+    "id": "env-dev",
+    "name": "DEV",
+    "accountsCount": 2,
+    "certificatesCount": 30
+  }
+]

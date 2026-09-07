@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:sqlite:certplatform-dev.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  flyway:
+    enabled: true
+    url: jdbc:sqlite:certplatform-dev.db
+
+cloud:
+  providers:
+    aws:
+      mode: MOCK
+      endpoint: http://localhost:8081
+    azure:
+      mode: MOCK
+      endpoint: http://localhost:8081
+    gcp:
+      mode: MOCK
+      endpoint: http://localhost:8081

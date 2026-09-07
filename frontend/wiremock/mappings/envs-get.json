@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/api/environments"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "environments.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}
