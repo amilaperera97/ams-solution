@@ -3,16 +3,6 @@
 # start.sh - Spin up the Certificate Discovery Platform (Spring Boot backend +
 #            Vite/React frontend) in one command.
 #
-# Usage:
-#   ./start.sh                 # start both, stream logs, Ctrl+C stops everything
-#   ./start.sh --backend-only
-#   ./start.sh --frontend-only
-#   ./start.sh --skip-install  # don't run npm install even if node_modules is stale
-#   ./start.sh --help
-#
-# Env overrides:
-#   BACKEND_PORT (8080)  FRONTEND_PORT (5173)  SPRING_PROFILES_ACTIVE (dev)
-#
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,12 +12,13 @@ LOG_DIR="$ROOT_DIR/logs"
 
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
-export SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-dev}"
+PROFILE="${SPRING_PROFILES_ACTIVE:-dev}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-180}"   # seconds to wait for backend health
 
 RUN_BACKEND=true
 RUN_FRONTEND=true
 SKIP_INSTALL=false
+CLEAR_DB=false
 
 BACKEND_PID=""
 FRONTEND_PID=""
@@ -47,7 +38,34 @@ ok()    { printf '%s[ ok  ]%s %s\n' "$C_GREEN"  "$C_RESET" "$*"; }
 warn()  { printf '%s[warn ]%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()   { printf '%s[error]%s %s\n' "$C_RED"    "$C_RESET" "$*" >&2; exit 1; }
 
-usage() { sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() {
+  cat <<'USAGE'
+start.sh - start the Certificate Discovery Platform (Spring Boot backend + Vite/React frontend).
+
+Usage:
+  ./start.sh                      start both on the dev profile, keeping existing data
+  ./start.sh --profile qa         run the qa profile (real cloud credentials, own database)
+  ./start.sh --clear-db           wipe this profile's database first, then start
+  ./start.sh --profile qa --clear-db
+  ./start.sh --backend-only
+  ./start.sh --frontend-only
+  ./start.sh --skip-install       don't run npm install even if node_modules is stale
+  ./start.sh --help
+
+Data is kept between runs by default; --clear-db (alias --fresh) is the only thing
+that deletes it, and it only ever touches the database of the selected profile.
+
+Profiles:
+  dev  every cloud provider simulated, database backend/certplatform-dev.db
+  qa   AWS calls go to real AWS,       database backend/certplatform-qa.db
+
+Env overrides:
+  BACKEND_PORT (8080)  FRONTEND_PORT (5173)  SPRING_PROFILES_ACTIVE (dev)
+  HEALTH_TIMEOUT (180)
+  CERTPLATFORM_SECRET_KEY   required by qa; encrypts stored cloud credentials
+  AWS_ENDPOINT_OVERRIDE     point qa at LocalStack instead of real AWS
+USAGE
+}
 
 # ------------------------------------------------------------------- args ---
 while [[ $# -gt 0 ]]; do
@@ -55,13 +73,42 @@ while [[ $# -gt 0 ]]; do
     --backend-only)  RUN_FRONTEND=false ;;
     --frontend-only) RUN_BACKEND=false ;;
     --skip-install)  SKIP_INSTALL=true ;;
+    --clear-db|--fresh) CLEAR_DB=true ;;
+    --profile)       [[ $# -ge 2 ]] || die "--profile needs a value (dev or qa)"
+                     PROFILE="$2"; shift ;;
+    --profile=*)     PROFILE="${1#*=}" ;;
     -h|--help)       usage; exit 0 ;;
     *)               die "Unknown option: $1 (try --help)" ;;
   esac
   shift
 done
 
+[[ -n "$PROFILE" ]] || die "--profile needs a value (dev or qa)"
+export SPRING_PROFILES_ACTIVE="$PROFILE"
+
+# Each profile keeps its own SQLite file, named to match application-<profile>.yml.
+DB_FILE="$BACKEND_DIR/certplatform-${PROFILE}.db"
+
 # -------------------------------------------------------------- utilities ---
+# Deletes the selected profile's database. SQLite also leaves -wal/-shm/-journal
+# sidecar files behind; leaving those would resurrect data we just deleted.
+clear_database() {
+  local removed=false
+  local f
+  for f in "$DB_FILE" "$DB_FILE-wal" "$DB_FILE-shm" "$DB_FILE-journal"; do
+    if [[ -e "$f" ]]; then
+      rm -f "$f"
+      info "  removed $(basename "$f")"
+      removed=true
+    fi
+  done
+  if $removed; then
+    ok "Cleared the $PROFILE database; Flyway will recreate the schema on startup."
+  else
+    info "No database at $DB_FILE yet - nothing to clear."
+  fi
+}
+
 port_in_use() {
   # Returns 0 if something is already listening on $1.
   local port="$1"
@@ -121,7 +168,22 @@ mkdir -p "$LOG_DIR"
 if $RUN_BACKEND; then
   [[ -x "$BACKEND_DIR/gradlew" ]] || die "Missing $BACKEND_DIR/gradlew"
   command -v java >/dev/null 2>&1 || die "java not found on PATH (JDK 21 required)"
+  [[ -f "$BACKEND_DIR/src/main/resources/application-${PROFILE}.yml" ]] \
+    || die "No application-${PROFILE}.yml in $BACKEND_DIR/src/main/resources (known profiles: dev, qa)"
   require_free_port "$BACKEND_PORT" "backend"
+
+  # qa holds real cloud credentials, and the app refuses to start without a key to
+  # encrypt them with. Fail here with instructions rather than on a Spring stack trace.
+  if [[ "$PROFILE" == "qa" && -z "${CERTPLATFORM_SECRET_KEY:-}" ]]; then
+    die "The qa profile stores real cloud credentials and needs an encryption key.
+       Generate one, then keep it safe - stored credentials cannot be read back without it:
+         export CERTPLATFORM_SECRET_KEY=\"\$(openssl rand -base64 32)\""
+  fi
+
+  if $CLEAR_DB; then
+    info "Clearing the $PROFILE database at $DB_FILE"
+    clear_database
+  fi
 fi
 
 if $RUN_FRONTEND; then
@@ -143,8 +205,9 @@ fi
 # ----------------------------------------------------------------- backend ---
 if $RUN_BACKEND; then
   BACKEND_LOG="$LOG_DIR/backend.log"
-  info "Starting backend on http://localhost:$BACKEND_PORT (profile: $SPRING_PROFILES_ACTIVE)"
+  info "Starting backend on http://localhost:$BACKEND_PORT (profile: $PROFILE)"
   info "  log: $BACKEND_LOG"
+  info "  database: $DB_FILE$($CLEAR_DB && echo " (cleared)" || echo " (existing data kept)")"
   BACKEND_PID="$(start_bg "$BACKEND_DIR" "$BACKEND_LOG" \
     ./gradlew bootRun --console=plain "--args=--server.port=$BACKEND_PORT")"
 

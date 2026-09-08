@@ -1,3 +1,4 @@
+# Local development: throwaway SQLite file, every provider simulated.
 spring:
   datasource:
     url: jdbc:sqlite:certplatform-dev.db
@@ -10,6 +11,11 @@ spring:
   flyway:
     enabled: true
     url: jdbc:sqlite:certplatform-dev.db
+
+certplatform:
+  security:
+    # Plaintext secrets are tolerated here because dev never holds real credentials.
+    require-encryption: false
 
 cloud:
   providers:

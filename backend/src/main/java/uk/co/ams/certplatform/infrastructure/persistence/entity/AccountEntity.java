@@ -35,12 +35,23 @@ public class AccountEntity {
     @Column(name = "auth_type")
     private AccountAuthType authType;
     
-    // In reality, token/role properties might be stored in a separate table or securely.
-    // For this demonstration, we'll keep it simple but ensure they are never exposed in GET responses.
+    // Secret-bearing columns (token, secret_access_key) are written encrypted when a
+    // secret key is configured, and are never exposed in GET responses.
     private String token;
     
     @Column(name = "role_arn")
     private String roleArn;
+    
+    @Column(name = "external_id")
+    private String externalId;
+    
+    @Column(name = "access_key_id")
+    private String accessKeyId;
+    
+    @Column(name = "secret_access_key")
+    private String secretAccessKey;
+    
+    private String region;
     
     private String status;
     
@@ -76,6 +87,18 @@ public class AccountEntity {
 
     public String getRoleArn() { return roleArn; }
     public void setRoleArn(String roleArn) { this.roleArn = roleArn; }
+
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String externalId) { this.externalId = externalId; }
+
+    public String getAccessKeyId() { return accessKeyId; }
+    public void setAccessKeyId(String accessKeyId) { this.accessKeyId = accessKeyId; }
+
+    public String getSecretAccessKey() { return secretAccessKey; }
+    public void setSecretAccessKey(String secretAccessKey) { this.secretAccessKey = secretAccessKey; }
+
+    public String getRegion() { return region; }
+    public void setRegion(String region) { this.region = region; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

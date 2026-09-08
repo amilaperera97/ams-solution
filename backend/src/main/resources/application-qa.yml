@@ -1,0 +1,38 @@
+# QA: real AWS accounts are configured through the API and persisted in their own
+# SQLite file. Requires CERTPLATFORM_SECRET_KEY - the app will not start without it.
+spring:
+  datasource:
+    url: jdbc:sqlite:certplatform-qa.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    url: jdbc:sqlite:certplatform-qa.db
+
+certplatform:
+  security:
+    require-encryption: true
+
+cloud:
+  providers:
+    aws:
+      mode: REAL
+      # Used only when an account has no region of its own. Change to suit your estate.
+      default-region: eu-west-2
+      api-timeout-seconds: 30
+      # Set this to point at LocalStack instead of real AWS, e.g. http://localhost:4566
+      endpoint: ${AWS_ENDPOINT_OVERRIDE:}
+    # No live implementation yet - a REAL test-connection would be a lie, so keep MOCK.
+    azure:
+      mode: MOCK
+    gcp:
+      mode: MOCK
+
+logging:
+  level:
+    uk.co.ams.certplatform: INFO
+    software.amazon.awssdk: WARN

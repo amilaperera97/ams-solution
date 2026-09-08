@@ -22,12 +22,11 @@ public class AccountController {
     @PostMapping("/environments/{environmentId}/accounts")
     public ResponseEntity<?> createAccount(@PathVariable String environmentId, @RequestBody CreateAccountRequest request) {
         Account created = accountService.createAccount(
-            environmentId, 
-            request.name(), 
-            request.accountId(), 
-            request.authType(), 
-            request.token(), 
-            request.roleArn()
+            environmentId,
+            request.name(),
+            request.accountId(),
+            request.authType(),
+            request.toCredentials()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(new AccountResponse(created));
     }

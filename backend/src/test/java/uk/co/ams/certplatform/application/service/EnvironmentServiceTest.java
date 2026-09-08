@@ -38,7 +38,7 @@ class EnvironmentServiceTest {
     @Test
     void shouldCreateEnvironment() {
         String providerId = "prov-123";
-        Provider provider = new Provider(providerId, "org-123", CloudProviderType.AWS, "ACTIVE", null, null);
+        Provider provider = new Provider(providerId, "AWS Provider", "org-123", CloudProviderType.AWS, "ACTIVE", null, null);
         Environment savedEnv = new Environment("env-123", "org-123", providerId, "Test Env", "Desc", "ACTIVE", null, null);
 
         when(providerRepositoryPort.findById(providerId)).thenReturn(Optional.of(provider));

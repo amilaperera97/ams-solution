@@ -18,7 +18,13 @@ repositories {
 	mavenCentral()
 }
 
+ext {
+	awsSdkVersion = '2.54.13'
+}
+
 dependencies {
+	implementation platform("software.amazon.awssdk:bom:${awsSdkVersion}")
+
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -28,6 +34,10 @@ dependencies {
 	implementation 'org.hibernate.orm:hibernate-community-dialects:6.5.2.Final'
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+	// Real cloud access (used by the qa profile; the dev profile stays on mocks)
+	implementation 'software.amazon.awssdk:sts'
+	implementation 'software.amazon.awssdk:acm'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'

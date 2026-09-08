@@ -4,71 +4,158 @@ import uk.co.ams.certplatform.application.port.AccountRepositoryPort;
 import uk.co.ams.certplatform.application.port.EnvironmentRepositoryPort;
 import uk.co.ams.certplatform.application.port.ProviderRepositoryPort;
 import uk.co.ams.certplatform.domain.enums.AccountAuthType;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 import uk.co.ams.certplatform.domain.model.Account;
 import uk.co.ams.certplatform.domain.model.Environment;
 import uk.co.ams.certplatform.domain.model.Provider;
 import uk.co.ams.certplatform.domain.model.ConnectionTestResult;
+import uk.co.ams.certplatform.shared.config.CloudProviderProperties;
+import uk.co.ams.certplatform.shared.security.SecretCipher;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class AccountService {
+
+    /** AKIA... for long-lived users, ASIA... for temporary session keys. */
+    private static final Pattern AWS_ACCESS_KEY_ID = Pattern.compile("^(AKIA|ASIA)[A-Z0-9]{16}$");
+    private static final Pattern AWS_ROLE_ARN = Pattern.compile("^arn:aws[a-z-]*:iam::\\d{12}:role/.+$");
+    private static final Pattern AWS_REGION = Pattern.compile("^[a-z]{2}(-[a-z]+){1,2}-\\d$");
 
     private final AccountRepositoryPort accountRepositoryPort;
     private final EnvironmentRepositoryPort environmentRepositoryPort;
     private final ProviderRepositoryPort providerRepositoryPort;
     private final CloudProviderResolver cloudProviderResolver;
+    private final CloudProviderProperties cloudProviderProperties;
+    private final SecretCipher secretCipher;
 
-    public AccountService(AccountRepositoryPort accountRepositoryPort, 
+    public AccountService(AccountRepositoryPort accountRepositoryPort,
                           EnvironmentRepositoryPort environmentRepositoryPort,
                           ProviderRepositoryPort providerRepositoryPort,
-                          CloudProviderResolver cloudProviderResolver) {
+                          CloudProviderResolver cloudProviderResolver,
+                          CloudProviderProperties cloudProviderProperties,
+                          SecretCipher secretCipher) {
         this.accountRepositoryPort = accountRepositoryPort;
         this.environmentRepositoryPort = environmentRepositoryPort;
         this.providerRepositoryPort = providerRepositoryPort;
         this.cloudProviderResolver = cloudProviderResolver;
+        this.cloudProviderProperties = cloudProviderProperties;
+        this.secretCipher = secretCipher;
     }
 
-    public Account createAccount(String environmentId, String name, String accountId, AccountAuthType authType, String token, String roleArn) {
+    public Account createAccount(String environmentId, String name, String accountId,
+                                 AccountAuthType authType, AccountCredentials credentials) {
         Environment env = environmentRepositoryPort.findById(environmentId)
             .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + environmentId));
 
-        // Validation rules
-        if (accountId == null || !accountId.matches("\\d{12}")) {
-            throw new IllegalArgumentException("AWS account ID must contain exactly 12 digits.");
-        }
+        Provider provider = providerRepositoryPort.findById(env.getProviderId())
+            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + env.getProviderId()));
 
-        if (authType == AccountAuthType.TOKEN && (token == null || token.isBlank())) {
-            throw new IllegalArgumentException("Token is required when authType is TOKEN.");
-        }
+        AccountCredentials creds = credentials != null ? credentials : AccountCredentials.none();
+        CloudProviderType providerType = provider.getType();
+        boolean realMode = cloudProviderProperties.isReal(providerType);
 
-        if (authType == AccountAuthType.IAM_ROLE && (roleArn == null || roleArn.isBlank())) {
-            throw new IllegalArgumentException("Role ARN is required when authType is IAM_ROLE.");
-        }
+        validate(accountId, authType, creds, providerType, realMode);
 
         Account account = new Account();
-        account.setId("acc-" + UUID.randomUUID().toString());
+        account.setId("acc-" + UUID.randomUUID());
         account.setOrganisationId(env.getOrganisationId());
         account.setProviderId(env.getProviderId());
         account.setEnvironmentId(environmentId);
         account.setName(name);
         account.setAccountId(accountId);
         account.setAuthType(authType);
-        
-        // In a real application, token/role credentials would be encrypted or passed to a secret manager here.
-        // For development we store them, but do not expose them.
-        account.setToken(token);
-        account.setRoleArn(roleArn);
-        
+
+        // Secrets are encrypted on the way into the database by AccountRepositoryAdapter.
+        account.setToken(creds.token());
+        account.setRoleArn(creds.roleArn());
+        account.setExternalId(creds.externalId());
+        account.setAccessKeyId(trimToNull(creds.accessKeyId()));
+        account.setSecretAccessKey(trimToNull(creds.secretAccessKey()));
+        account.setRegion(trimToNull(creds.region()));
+
         account.setStatus("ACTIVE");
         account.setCreatedAt(Instant.now());
         account.setUpdatedAt(Instant.now());
 
         return accountRepositoryPort.save(account);
+    }
+
+    private void validate(String accountId, AccountAuthType authType, AccountCredentials creds,
+                          CloudProviderType providerType, boolean realMode) {
+        boolean aws = providerType == CloudProviderType.AWS;
+
+        if (aws) {
+            if (accountId == null || !accountId.matches("\\d{12}")) {
+                throw new IllegalArgumentException("AWS account ID must contain exactly 12 digits.");
+            }
+        } else if (accountId == null || accountId.isBlank()) {
+            throw new IllegalArgumentException("Account ID is required.");
+        }
+
+        if (authType == null) {
+            throw new IllegalArgumentException("Auth type is required (TOKEN, IAM_ROLE or ACCESS_KEY).");
+        }
+
+        // Refuse to write a live cloud secret to disk unencrypted, whatever the profile says.
+        if (realMode && !secretCipher.encryptionEnabled()
+                && (creds.hasAccessKey() || isPresent(creds.token()))) {
+            throw new IllegalStateException(
+                "Refusing to store credentials for a REAL provider without encryption. "
+                + "Set CERTPLATFORM_SECRET_KEY and restart.");
+        }
+
+        if (isPresent(creds.region()) && aws && !AWS_REGION.matcher(creds.region().trim()).matches()) {
+            throw new IllegalArgumentException("Region must look like an AWS region, e.g. eu-west-2.");
+        }
+
+        switch (authType) {
+            case TOKEN -> {
+                if (!isPresent(creds.token())) {
+                    throw new IllegalArgumentException("Token is required when authType is TOKEN.");
+                }
+                if (aws && realMode) {
+                    throw new IllegalArgumentException(
+                        "TOKEN auth cannot reach real AWS. Use ACCESS_KEY or IAM_ROLE.");
+                }
+            }
+            case IAM_ROLE -> {
+                if (!isPresent(creds.roleArn())) {
+                    throw new IllegalArgumentException("Role ARN is required when authType is IAM_ROLE.");
+                }
+                if (aws && realMode) {
+                    if (!AWS_ROLE_ARN.matcher(creds.roleArn().trim()).matches()) {
+                        throw new IllegalArgumentException(
+                            "Role ARN must look like arn:aws:iam::123456789012:role/RoleName.");
+                    }
+                    requireRegion(creds);
+                }
+            }
+            case ACCESS_KEY -> {
+                if (!isPresent(creds.accessKeyId()) || !isPresent(creds.secretAccessKey())) {
+                    throw new IllegalArgumentException(
+                        "Access key ID and secret access key are both required when authType is ACCESS_KEY.");
+                }
+                if (aws && realMode) {
+                    if (!AWS_ACCESS_KEY_ID.matcher(creds.accessKeyId().trim()).matches()) {
+                        throw new IllegalArgumentException(
+                            "Access key ID must be 20 characters starting with AKIA or ASIA.");
+                    }
+                    requireRegion(creds);
+                }
+            }
+        }
+    }
+
+    private void requireRegion(AccountCredentials creds) {
+        if (!isPresent(creds.region())) {
+            throw new IllegalArgumentException("Region is required when the provider is in REAL mode.");
+        }
     }
 
     public Optional<Account> getAccount(String id) {
@@ -82,10 +169,18 @@ public class AccountService {
     public ConnectionTestResult testConnection(String accountId) {
         Account account = accountRepositoryPort.findById(accountId)
             .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
-            
+
         Provider provider = providerRepositoryPort.findById(account.getProviderId())
             .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + account.getProviderId()));
-            
+
         return cloudProviderResolver.getAdapter(provider.getType()).testConnection(account);
+    }
+
+    private static boolean isPresent(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static String trimToNull(String value) {
+        return isPresent(value) ? value.trim() : null;
     }
 }

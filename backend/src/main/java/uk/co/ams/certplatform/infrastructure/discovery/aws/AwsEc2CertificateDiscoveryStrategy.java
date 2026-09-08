@@ -6,6 +6,7 @@ import uk.co.ams.certplatform.application.port.OperatingSystemCertificateDiscove
 import uk.co.ams.certplatform.application.port.RuntimeCertificateDiscoveryAdapter;
 import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 import uk.co.ams.certplatform.domain.model.*;
+import uk.co.ams.certplatform.shared.config.CloudProviderProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -15,11 +16,14 @@ public class AwsEc2CertificateDiscoveryStrategy implements CertificateDiscoveryS
 
     private final List<OperatingSystemCertificateDiscoveryStrategy> osStrategies;
     private final List<RuntimeCertificateDiscoveryAdapter> runtimeAdapters;
+    private final CloudProviderProperties properties;
 
     public AwsEc2CertificateDiscoveryStrategy(List<OperatingSystemCertificateDiscoveryStrategy> osStrategies,
-                                              List<RuntimeCertificateDiscoveryAdapter> runtimeAdapters) {
+                                              List<RuntimeCertificateDiscoveryAdapter> runtimeAdapters,
+                                              CloudProviderProperties properties) {
         this.osStrategies = osStrategies;
         this.runtimeAdapters = runtimeAdapters;
+        this.properties = properties;
     }
 
     @Override
@@ -40,6 +44,14 @@ public class AwsEc2CertificateDiscoveryStrategy implements CertificateDiscoveryS
                 context.getRegion(),
                 context.getService()
         );
+
+        // EC2 deep discovery has no live implementation yet. Reporting SKIPPED beats
+        // returning invented instance certificates while the provider is in REAL mode.
+        if (properties.isReal(CloudProviderType.AWS)) {
+            result.setStatus("SKIPPED");
+            result.setMessage("EC2 deep discovery is not implemented for REAL mode; no certificates were read from AWS.");
+            return result;
+        }
 
         try {
             // Simulated EC2 discovery

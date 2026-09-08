@@ -13,6 +13,10 @@ public class Account {
     private AccountAuthType authType;
     private String token; // For TOKEN auth
     private String roleArn; // For IAM_ROLE auth
+    private String externalId; // Optional sts:ExternalId for IAM_ROLE auth
+    private String accessKeyId; // For ACCESS_KEY auth
+    private String secretAccessKey; // For ACCESS_KEY auth - held in plaintext in memory only
+    private String region; // Home region used for provider API calls
     private String status;
     private Instant createdAt;
     private Instant updatedAt;
@@ -45,6 +49,18 @@ public class Account {
 
     public String getRoleArn() { return roleArn; }
     public void setRoleArn(String roleArn) { this.roleArn = roleArn; }
+
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String externalId) { this.externalId = externalId; }
+
+    public String getAccessKeyId() { return accessKeyId; }
+    public void setAccessKeyId(String accessKeyId) { this.accessKeyId = accessKeyId; }
+
+    public String getSecretAccessKey() { return secretAccessKey; }
+    public void setSecretAccessKey(String secretAccessKey) { this.secretAccessKey = secretAccessKey; }
+
+    public String getRegion() { return region; }
+    public void setRegion(String region) { this.region = region; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

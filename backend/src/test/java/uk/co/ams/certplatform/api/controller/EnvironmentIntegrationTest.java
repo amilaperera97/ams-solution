@@ -40,7 +40,7 @@ class EnvironmentIntegrationTest {
         Organisation org = new Organisation("org-env-test", "Integration Org", "Desc", "ACTIVE", Instant.now(), null);
         orgRepo.save(org);
 
-        Provider provider = new Provider("prov-env-test", "org-env-test", CloudProviderType.AWS, "ACTIVE", Instant.now(), null);
+        Provider provider = new Provider("prov-env-test", "AWS Provider", "org-env-test", CloudProviderType.AWS, "ACTIVE", Instant.now(), null);
         providerRepo.save(provider);
 
         String createJson = """

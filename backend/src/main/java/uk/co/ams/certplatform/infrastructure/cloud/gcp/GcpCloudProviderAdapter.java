@@ -6,12 +6,19 @@ import uk.co.ams.certplatform.domain.model.Account;
 import uk.co.ams.certplatform.domain.model.CertificateScanResult;
 import uk.co.ams.certplatform.domain.model.ConnectionTestResult;
 import uk.co.ams.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.shared.config.CloudProviderProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 
 @Component
 public class GcpCloudProviderAdapter implements CloudProviderAdapter {
+
+    private final CloudProviderProperties properties;
+
+    public GcpCloudProviderAdapter(CloudProviderProperties properties) {
+        this.properties = properties;
+    }
 
     @Override
     public CloudProviderType providerType() {
@@ -20,8 +27,15 @@ public class GcpCloudProviderAdapter implements CloudProviderAdapter {
 
     @Override
     public ConnectionTestResult testConnection(Account account) {
+        // Only AWS has a live implementation so far. Say so rather than reporting a
+        // simulated success against what the operator believes is a real account.
+        if (properties.isReal(CloudProviderType.GCP)) {
+            return new ConnectionTestResult("FAILED", CloudProviderType.GCP, account.getAccountId(),
+                    "REAL mode is not implemented for GCP yet; only AWS can be verified live.");
+        }
         if (account.getToken() != null && !account.getToken().isBlank()) {
-             return new ConnectionTestResult("CONNECTED", CloudProviderType.GCP, account.getAccountId(), "Connection successful");
+             return new ConnectionTestResult("CONNECTED", CloudProviderType.GCP, account.getAccountId(),
+                     "Connection successful (simulated - provider mode is MOCK)");
         }
         return new ConnectionTestResult("FAILED", CloudProviderType.GCP, account.getAccountId(), "Unable to authenticate with cloud provider");
     }

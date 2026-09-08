@@ -9,3 +9,20 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /v3/api-docs
+
+certplatform:
+  security:
+    # Injected from the environment; blank means secrets are stored as plaintext,
+    # which profiles holding real credentials reject via require-encryption.
+    secret-key: ${CERTPLATFORM_SECRET_KEY:}
+    require-encryption: false
+
+# Defaults; each profile overrides the providers it actually uses.
+cloud:
+  providers:
+    aws:
+      mode: MOCK
+    azure:
+      mode: MOCK
+    gcp:
+      mode: MOCK

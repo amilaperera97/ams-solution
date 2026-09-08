@@ -45,7 +45,7 @@ class AccountIntegrationTest {
         Organisation org = new Organisation("org-acc-test", "Integration Org", "Desc", "ACTIVE", Instant.now(), null);
         orgRepo.save(org);
 
-        Provider provider = new Provider("prov-acc-test", "org-acc-test", CloudProviderType.AWS, "ACTIVE", Instant.now(), null);
+        Provider provider = new Provider("prov-acc-test", "AWS Provider", "org-acc-test", CloudProviderType.AWS, "ACTIVE", Instant.now(), null);
         providerRepo.save(provider);
 
         Environment env = new Environment("env-acc-test", "org-acc-test", "prov-acc-test", "PROD", "Desc", "ACTIVE", Instant.now(), null);

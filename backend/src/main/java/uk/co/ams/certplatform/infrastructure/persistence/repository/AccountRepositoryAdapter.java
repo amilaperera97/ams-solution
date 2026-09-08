@@ -3,6 +3,7 @@ package uk.co.ams.certplatform.infrastructure.persistence.repository;
 import uk.co.ams.certplatform.application.port.AccountRepositoryPort;
 import uk.co.ams.certplatform.domain.model.Account;
 import uk.co.ams.certplatform.infrastructure.persistence.entity.AccountEntity;
+import uk.co.ams.certplatform.shared.security.SecretCipher;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -13,9 +14,11 @@ import java.util.stream.Collectors;
 public class AccountRepositoryAdapter implements AccountRepositoryPort {
 
     private final JpaAccountRepository jpaRepository;
+    private final SecretCipher secretCipher;
 
-    public AccountRepositoryAdapter(JpaAccountRepository jpaRepository) {
+    public AccountRepositoryAdapter(JpaAccountRepository jpaRepository, SecretCipher secretCipher) {
         this.jpaRepository = jpaRepository;
+        this.secretCipher = secretCipher;
     }
 
     @Override
@@ -57,8 +60,12 @@ public class AccountRepositoryAdapter implements AccountRepositoryPort {
         entity.setName(domain.getName());
         entity.setAccountId(domain.getAccountId());
         entity.setAuthType(domain.getAuthType());
-        entity.setToken(domain.getToken());
+        entity.setToken(secretCipher.encrypt(domain.getToken()));
         entity.setRoleArn(domain.getRoleArn());
+        entity.setExternalId(domain.getExternalId());
+        entity.setAccessKeyId(domain.getAccessKeyId());
+        entity.setSecretAccessKey(secretCipher.encrypt(domain.getSecretAccessKey()));
+        entity.setRegion(domain.getRegion());
         entity.setStatus(domain.getStatus());
         entity.setCreatedAt(domain.getCreatedAt());
         entity.setUpdatedAt(domain.getUpdatedAt());
@@ -75,8 +82,12 @@ public class AccountRepositoryAdapter implements AccountRepositoryPort {
         account.setName(entity.getName());
         account.setAccountId(entity.getAccountId());
         account.setAuthType(entity.getAuthType());
-        account.setToken(entity.getToken());
+        account.setToken(secretCipher.decrypt(entity.getToken()));
         account.setRoleArn(entity.getRoleArn());
+        account.setExternalId(entity.getExternalId());
+        account.setAccessKeyId(entity.getAccessKeyId());
+        account.setSecretAccessKey(secretCipher.decrypt(entity.getSecretAccessKey()));
+        account.setRegion(entity.getRegion());
         account.setStatus(entity.getStatus());
         account.setCreatedAt(entity.getCreatedAt());
         account.setUpdatedAt(entity.getUpdatedAt());

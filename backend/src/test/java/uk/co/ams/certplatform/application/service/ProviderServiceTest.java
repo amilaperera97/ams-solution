@@ -40,12 +40,12 @@ class ProviderServiceTest {
     void shouldCreateProvider() {
         String orgId = "org-123";
         Organisation org = new Organisation(orgId, "Test Org", "Desc", "ACTIVE", null, null);
-        Provider savedProvider = new Provider("prov-123", orgId, CloudProviderType.AWS, "ACTIVE", null, null);
+        Provider savedProvider = new Provider("prov-123", "AWS Provider", orgId, CloudProviderType.AWS, "ACTIVE", null, null);
         
         when(organisationRepositoryPort.findById(orgId)).thenReturn(Optional.of(org));
         when(providerRepositoryPort.save(any(Provider.class))).thenReturn(savedProvider);
 
-        Provider result = providerService.createProvider(orgId, CloudProviderType.AWS);
+        Provider result = providerService.createProvider(orgId, "AWS Provider", CloudProviderType.AWS);
 
         assertNotNull(result);
         assertEquals("prov-123", result.getId());
@@ -60,7 +60,7 @@ class ProviderServiceTest {
         when(organisationRepositoryPort.findById(orgId)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> {
-            providerService.createProvider(orgId, CloudProviderType.AWS);
+            providerService.createProvider(orgId, "AWS Provider", CloudProviderType.AWS);
         });
         
         verify(providerRepositoryPort, never()).save(any());
@@ -69,7 +69,7 @@ class ProviderServiceTest {
     @Test
     void shouldGetProvidersByOrganisationId() {
         String orgId = "org-123";
-        Provider savedProvider = new Provider("prov-123", orgId, CloudProviderType.AWS, "ACTIVE", null, null);
+        Provider savedProvider = new Provider("prov-123", "AWS Provider", orgId, CloudProviderType.AWS, "ACTIVE", null, null);
         
         when(providerRepositoryPort.findByOrganisationId(orgId)).thenReturn(Collections.singletonList(savedProvider));
 
