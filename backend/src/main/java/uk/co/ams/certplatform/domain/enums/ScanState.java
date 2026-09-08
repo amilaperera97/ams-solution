@@ -1,4 +1,4 @@
-package com.example.certplatform.domain.enums;
+package uk.co.ams.certplatform.domain.enums;
 
 public enum ScanState {
     REQUESTED,

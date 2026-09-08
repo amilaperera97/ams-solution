@@ -1,4 +1,4 @@
-package com.example.certplatform.domain.model;
+package uk.co.ams.certplatform.domain.model;
 
 import java.util.ArrayList;
 import java.util.List;

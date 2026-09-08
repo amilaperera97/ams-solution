@@ -1,4 +1,4 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
 public record CreateEnvironmentRequest(
     String name,

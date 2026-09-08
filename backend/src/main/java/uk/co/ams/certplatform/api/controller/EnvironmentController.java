@@ -1,7 +1,7 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
-import com.example.certplatform.application.service.EnvironmentService;
-import com.example.certplatform.domain.model.Environment;
+import uk.co.ams.certplatform.application.service.EnvironmentService;
+import uk.co.ams.certplatform.domain.model.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

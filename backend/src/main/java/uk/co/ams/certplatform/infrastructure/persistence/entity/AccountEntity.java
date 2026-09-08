@@ -1,6 +1,6 @@
-package com.example.certplatform.infrastructure.persistence.entity;
+package uk.co.ams.certplatform.infrastructure.persistence.entity;
 
-import com.example.certplatform.domain.enums.AccountAuthType;
+import uk.co.ams.certplatform.domain.enums.AccountAuthType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;

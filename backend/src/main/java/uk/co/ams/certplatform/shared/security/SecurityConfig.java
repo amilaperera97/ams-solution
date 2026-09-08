@@ -1,4 +1,4 @@
-package com.example.certplatform.shared.security;
+package uk.co.ams.certplatform.shared.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

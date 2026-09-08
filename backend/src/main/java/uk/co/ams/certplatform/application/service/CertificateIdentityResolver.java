@@ -1,8 +1,8 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.domain.model.Certificate;
-import com.example.certplatform.domain.model.CertificateUsage;
-import com.example.certplatform.domain.model.ResourceTag;
+import uk.co.ams.certplatform.domain.model.Certificate;
+import uk.co.ams.certplatform.domain.model.CertificateUsage;
+import uk.co.ams.certplatform.domain.model.ResourceTag;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;

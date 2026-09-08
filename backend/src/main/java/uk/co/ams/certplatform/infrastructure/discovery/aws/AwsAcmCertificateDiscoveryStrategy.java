@@ -1,12 +1,12 @@
-package com.example.certplatform.infrastructure.discovery.aws;
+package uk.co.ams.certplatform.infrastructure.discovery.aws;
 
-import com.example.certplatform.application.port.CertificateDiscoveryStrategy;
-import com.example.certplatform.application.port.DiscoveryCapability;
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.model.Certificate;
-import com.example.certplatform.domain.model.CertificateUsage;
-import com.example.certplatform.domain.model.DiscoveryResult;
-import com.example.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.application.port.CertificateDiscoveryStrategy;
+import uk.co.ams.certplatform.application.port.DiscoveryCapability;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.Certificate;
+import uk.co.ams.certplatform.domain.model.CertificateUsage;
+import uk.co.ams.certplatform.domain.model.DiscoveryResult;
+import uk.co.ams.certplatform.domain.model.ScanContext;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;

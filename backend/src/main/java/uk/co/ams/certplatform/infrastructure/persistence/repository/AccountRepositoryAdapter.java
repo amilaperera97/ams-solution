@@ -1,8 +1,8 @@
-package com.example.certplatform.infrastructure.persistence.repository;
+package uk.co.ams.certplatform.infrastructure.persistence.repository;
 
-import com.example.certplatform.application.port.AccountRepositoryPort;
-import com.example.certplatform.domain.model.Account;
-import com.example.certplatform.infrastructure.persistence.entity.AccountEntity;
+import uk.co.ams.certplatform.application.port.AccountRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Account;
+import uk.co.ams.certplatform.infrastructure.persistence.entity.AccountEntity;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

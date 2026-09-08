@@ -1,8 +1,8 @@
-package com.example.certplatform.infrastructure.persistence.repository;
+package uk.co.ams.certplatform.infrastructure.persistence.repository;
 
-import com.example.certplatform.application.port.ScanRepositoryPort;
-import com.example.certplatform.domain.model.Scan;
-import com.example.certplatform.infrastructure.persistence.entity.ScanEntity;
+import uk.co.ams.certplatform.application.port.ScanRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Scan;
+import uk.co.ams.certplatform.infrastructure.persistence.entity.ScanEntity;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;

@@ -1,9 +1,9 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
-import com.example.certplatform.application.port.AccountRepositoryPort;
-import com.example.certplatform.application.port.CertificateRepositoryPort;
-import com.example.certplatform.application.port.EnvironmentRepositoryPort;
-import com.example.certplatform.application.port.ProviderRepositoryPort;
+import uk.co.ams.certplatform.application.port.AccountRepositoryPort;
+import uk.co.ams.certplatform.application.port.CertificateRepositoryPort;
+import uk.co.ams.certplatform.application.port.EnvironmentRepositoryPort;
+import uk.co.ams.certplatform.application.port.ProviderRepositoryPort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

@@ -1,4 +1,4 @@
-package com.example.certplatform.domain.model;
+package uk.co.ams.certplatform.domain.model;
 
 public class ResourceTag {
     private String key;

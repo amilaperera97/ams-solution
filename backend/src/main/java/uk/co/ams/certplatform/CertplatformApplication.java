@@ -1,4 +1,4 @@
-package com.example.certplatform;
+package uk.co.ams.certplatform;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

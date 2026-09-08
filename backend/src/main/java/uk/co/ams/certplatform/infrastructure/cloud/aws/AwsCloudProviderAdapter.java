@@ -1,11 +1,11 @@
-package com.example.certplatform.infrastructure.cloud.aws;
+package uk.co.ams.certplatform.infrastructure.cloud.aws;
 
-import com.example.certplatform.application.port.CloudProviderAdapter;
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.model.Account;
-import com.example.certplatform.domain.model.CertificateScanResult;
-import com.example.certplatform.domain.model.ConnectionTestResult;
-import com.example.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.application.port.CloudProviderAdapter;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.Account;
+import uk.co.ams.certplatform.domain.model.CertificateScanResult;
+import uk.co.ams.certplatform.domain.model.ConnectionTestResult;
+import uk.co.ams.certplatform.domain.model.ScanContext;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;

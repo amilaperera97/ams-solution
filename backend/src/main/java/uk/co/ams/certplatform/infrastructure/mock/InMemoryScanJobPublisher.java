@@ -1,7 +1,7 @@
-package com.example.certplatform.infrastructure.mock;
+package uk.co.ams.certplatform.infrastructure.mock;
 
-import com.example.certplatform.application.port.ScanJobPublisher;
-import com.example.certplatform.application.port.ScanExecutor;
+import uk.co.ams.certplatform.application.port.ScanJobPublisher;
+import uk.co.ams.certplatform.application.port.ScanExecutor;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import java.util.concurrent.ExecutorService;

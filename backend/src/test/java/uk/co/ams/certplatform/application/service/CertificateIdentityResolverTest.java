@@ -1,7 +1,7 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.domain.model.Certificate;
-import com.example.certplatform.domain.model.CertificateUsage;
+import uk.co.ams.certplatform.domain.model.Certificate;
+import uk.co.ams.certplatform.domain.model.CertificateUsage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

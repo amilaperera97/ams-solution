@@ -1,4 +1,4 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
 import java.util.Map;
 

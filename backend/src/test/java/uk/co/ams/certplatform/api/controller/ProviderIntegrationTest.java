@@ -1,7 +1,7 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
-import com.example.certplatform.domain.model.Organisation;
-import com.example.certplatform.application.port.OrganisationRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Organisation;
+import uk.co.ams.certplatform.application.port.OrganisationRepositoryPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;

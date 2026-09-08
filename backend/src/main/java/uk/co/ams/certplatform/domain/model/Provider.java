@@ -1,6 +1,6 @@
-package com.example.certplatform.domain.model;
+package uk.co.ams.certplatform.domain.model;
 
-import com.example.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 import java.time.Instant;
 
 public class Provider {

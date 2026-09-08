@@ -1,9 +1,9 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.*;
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.enums.ScanState;
-import com.example.certplatform.domain.model.*;
+import uk.co.ams.certplatform.application.port.*;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.enums.ScanState;
+import uk.co.ams.certplatform.domain.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -149,7 +149,7 @@ public class DefaultScanExecutor implements ScanExecutor {
 
     private List<Account> resolveAccounts(Scan scan) {
         List<Account> accounts = new ArrayList<>();
-        if (scan.getScopeType() == com.example.certplatform.domain.enums.ScanScopeType.ACCOUNT) {
+        if (scan.getScopeType() == uk.co.ams.certplatform.domain.enums.ScanScopeType.ACCOUNT) {
             if (scan.getAccountIds() != null) {
                 for (String accountId : scan.getAccountIds()) {
                     accountRepositoryPort.findById(accountId).ifPresent(accounts::add);
@@ -159,7 +159,7 @@ public class DefaultScanExecutor implements ScanExecutor {
             // Stub for brevity
             Account dummy = new Account();
             dummy.setId("dummy-account");
-            dummy.setAuthType(com.example.certplatform.domain.enums.AccountAuthType.TOKEN);
+            dummy.setAuthType(uk.co.ams.certplatform.domain.enums.AccountAuthType.TOKEN);
             accounts.add(dummy);
         }
         return accounts;

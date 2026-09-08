@@ -1,10 +1,10 @@
-package com.example.certplatform.application.port;
+package uk.co.ams.certplatform.application.port;
 
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.model.Account;
-import com.example.certplatform.domain.model.CertificateScanResult;
-import com.example.certplatform.domain.model.ConnectionTestResult;
-import com.example.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.Account;
+import uk.co.ams.certplatform.domain.model.CertificateScanResult;
+import uk.co.ams.certplatform.domain.model.ConnectionTestResult;
+import uk.co.ams.certplatform.domain.model.ScanContext;
 
 public interface CloudProviderAdapter {
     CloudProviderType providerType();

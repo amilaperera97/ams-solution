@@ -1,10 +1,10 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.ScanJobPublisher;
-import com.example.certplatform.application.port.ScanRepositoryPort;
-import com.example.certplatform.domain.enums.ScanScopeType;
-import com.example.certplatform.domain.enums.ScanState;
-import com.example.certplatform.domain.model.Scan;
+import uk.co.ams.certplatform.application.port.ScanJobPublisher;
+import uk.co.ams.certplatform.application.port.ScanRepositoryPort;
+import uk.co.ams.certplatform.domain.enums.ScanScopeType;
+import uk.co.ams.certplatform.domain.enums.ScanState;
+import uk.co.ams.certplatform.domain.model.Scan;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

@@ -1,7 +1,7 @@
-package com.example.certplatform.domain.model;
+package uk.co.ams.certplatform.domain.model;
 
-import com.example.certplatform.domain.enums.ScanScopeType;
-import com.example.certplatform.domain.enums.ScanState;
+import uk.co.ams.certplatform.domain.enums.ScanScopeType;
+import uk.co.ams.certplatform.domain.enums.ScanState;
 import java.time.Instant;
 import java.util.List;
 

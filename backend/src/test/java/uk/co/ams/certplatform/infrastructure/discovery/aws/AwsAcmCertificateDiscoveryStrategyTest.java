@@ -1,9 +1,9 @@
-package com.example.certplatform.infrastructure.discovery.aws;
+package uk.co.ams.certplatform.infrastructure.discovery.aws;
 
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.model.Account;
-import com.example.certplatform.domain.model.DiscoveryResult;
-import com.example.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.Account;
+import uk.co.ams.certplatform.domain.model.DiscoveryResult;
+import uk.co.ams.certplatform.domain.model.ScanContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

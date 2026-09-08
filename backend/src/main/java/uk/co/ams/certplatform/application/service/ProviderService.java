@@ -1,9 +1,9 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.OrganisationRepositoryPort;
-import com.example.certplatform.application.port.ProviderRepositoryPort;
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.model.Provider;
+import uk.co.ams.certplatform.application.port.OrganisationRepositoryPort;
+import uk.co.ams.certplatform.application.port.ProviderRepositoryPort;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.Provider;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;

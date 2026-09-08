@@ -1,6 +1,6 @@
-package com.example.certplatform.application.port;
+package uk.co.ams.certplatform.application.port;
 
-import com.example.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 
 public class DiscoveryCapability {
     private CloudProviderType provider;

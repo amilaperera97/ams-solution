@@ -1,8 +1,8 @@
-package com.example.certplatform.infrastructure.persistence.repository;
+package uk.co.ams.certplatform.infrastructure.persistence.repository;
 
-import com.example.certplatform.application.port.CertificateRepositoryPort;
-import com.example.certplatform.domain.model.Certificate;
-import com.example.certplatform.infrastructure.persistence.entity.CertificateEntity;
+import uk.co.ams.certplatform.application.port.CertificateRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Certificate;
+import uk.co.ams.certplatform.infrastructure.persistence.entity.CertificateEntity;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -124,12 +124,12 @@ public class CertificateRepositoryAdapter implements CertificateRepositoryPort {
 
         try {
             if (entity.getUsagesJson() != null) {
-                java.util.List<com.example.certplatform.domain.model.CertificateUsage> usages = 
+                java.util.List<uk.co.ams.certplatform.domain.model.CertificateUsage> usages = 
                         objectMapper.readValue(entity.getUsagesJson(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
                 usages.forEach(cert::addUsage);
             }
             if (entity.getTagsJson() != null) {
-                java.util.List<com.example.certplatform.domain.model.ResourceTag> tags = 
+                java.util.List<uk.co.ams.certplatform.domain.model.ResourceTag> tags = 
                         objectMapper.readValue(entity.getTagsJson(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
                 tags.forEach(cert::addTag);
             }

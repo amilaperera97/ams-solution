@@ -1,8 +1,8 @@
-package com.example.certplatform.infrastructure.persistence.repository;
+package uk.co.ams.certplatform.infrastructure.persistence.repository;
 
-import com.example.certplatform.application.port.ProviderRepositoryPort;
-import com.example.certplatform.domain.model.Provider;
-import com.example.certplatform.infrastructure.persistence.entity.ProviderEntity;
+import uk.co.ams.certplatform.application.port.ProviderRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Provider;
+import uk.co.ams.certplatform.infrastructure.persistence.entity.ProviderEntity;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

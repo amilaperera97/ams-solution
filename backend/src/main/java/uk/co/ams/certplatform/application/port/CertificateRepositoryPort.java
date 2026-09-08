@@ -1,6 +1,6 @@
-package com.example.certplatform.application.port;
+package uk.co.ams.certplatform.application.port;
 
-import com.example.certplatform.domain.model.Certificate;
+import uk.co.ams.certplatform.domain.model.Certificate;
 import java.util.List;
 
 public interface CertificateRepositoryPort {

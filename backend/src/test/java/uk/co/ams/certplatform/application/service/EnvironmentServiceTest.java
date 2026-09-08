@@ -1,10 +1,10 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.EnvironmentRepositoryPort;
-import com.example.certplatform.application.port.ProviderRepositoryPort;
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.model.Environment;
-import com.example.certplatform.domain.model.Provider;
+import uk.co.ams.certplatform.application.port.EnvironmentRepositoryPort;
+import uk.co.ams.certplatform.application.port.ProviderRepositoryPort;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.Environment;
+import uk.co.ams.certplatform.domain.model.Provider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

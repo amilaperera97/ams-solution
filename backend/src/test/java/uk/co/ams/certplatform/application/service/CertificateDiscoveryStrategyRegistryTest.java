@@ -1,8 +1,8 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.CertificateDiscoveryStrategy;
-import com.example.certplatform.application.port.DiscoveryCapability;
-import com.example.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.application.port.CertificateDiscoveryStrategy;
+import uk.co.ams.certplatform.application.port.DiscoveryCapability;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

@@ -1,8 +1,8 @@
-package com.example.certplatform.infrastructure.persistence.repository;
+package uk.co.ams.certplatform.infrastructure.persistence.repository;
 
-import com.example.certplatform.application.port.OrganisationRepositoryPort;
-import com.example.certplatform.domain.model.Organisation;
-import com.example.certplatform.infrastructure.persistence.entity.OrganisationEntity;
+import uk.co.ams.certplatform.application.port.OrganisationRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Organisation;
+import uk.co.ams.certplatform.infrastructure.persistence.entity.OrganisationEntity;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

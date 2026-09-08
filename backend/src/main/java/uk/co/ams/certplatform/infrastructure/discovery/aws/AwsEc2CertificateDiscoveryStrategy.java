@@ -1,11 +1,11 @@
-package com.example.certplatform.infrastructure.discovery.aws;
+package uk.co.ams.certplatform.infrastructure.discovery.aws;
 
-import com.example.certplatform.application.port.CertificateDiscoveryStrategy;
-import com.example.certplatform.application.port.DiscoveryCapability;
-import com.example.certplatform.application.port.OperatingSystemCertificateDiscoveryStrategy;
-import com.example.certplatform.application.port.RuntimeCertificateDiscoveryAdapter;
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.model.*;
+import uk.co.ams.certplatform.application.port.CertificateDiscoveryStrategy;
+import uk.co.ams.certplatform.application.port.DiscoveryCapability;
+import uk.co.ams.certplatform.application.port.OperatingSystemCertificateDiscoveryStrategy;
+import uk.co.ams.certplatform.application.port.RuntimeCertificateDiscoveryAdapter;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.*;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

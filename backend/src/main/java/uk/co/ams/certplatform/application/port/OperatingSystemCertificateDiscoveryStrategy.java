@@ -1,8 +1,8 @@
-package com.example.certplatform.application.port;
+package uk.co.ams.certplatform.application.port;
 
-import com.example.certplatform.domain.model.DiscoveryResult;
-import com.example.certplatform.domain.model.ScanContext;
-import com.example.certplatform.domain.model.OperatingSystemMetadata;
+import uk.co.ams.certplatform.domain.model.DiscoveryResult;
+import uk.co.ams.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.domain.model.OperatingSystemMetadata;
 
 public interface OperatingSystemCertificateDiscoveryStrategy {
 

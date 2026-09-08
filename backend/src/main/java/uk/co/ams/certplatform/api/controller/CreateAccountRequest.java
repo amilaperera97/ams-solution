@@ -1,6 +1,6 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
-import com.example.certplatform.domain.enums.AccountAuthType;
+import uk.co.ams.certplatform.domain.enums.AccountAuthType;
 
 public record CreateAccountRequest(
     String name,

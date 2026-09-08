@@ -1,6 +1,6 @@
-package com.example.certplatform.application.port;
+package uk.co.ams.certplatform.application.port;
 
-import com.example.certplatform.domain.model.Account;
+import uk.co.ams.certplatform.domain.model.Account;
 import java.util.List;
 import java.util.Optional;
 

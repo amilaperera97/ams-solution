@@ -1,15 +1,15 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.AccountRepositoryPort;
-import com.example.certplatform.application.port.CertificateDiscoveryStrategy;
-import com.example.certplatform.application.port.CertificateRepositoryPort;
-import com.example.certplatform.application.port.ScanRepositoryPort;
-import com.example.certplatform.domain.enums.CloudProviderType;
-import com.example.certplatform.domain.enums.ScanState;
-import com.example.certplatform.domain.model.Account;
-import com.example.certplatform.domain.model.DiscoveryResult;
-import com.example.certplatform.domain.model.Scan;
-import com.example.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.application.port.AccountRepositoryPort;
+import uk.co.ams.certplatform.application.port.CertificateDiscoveryStrategy;
+import uk.co.ams.certplatform.application.port.CertificateRepositoryPort;
+import uk.co.ams.certplatform.application.port.ScanRepositoryPort;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.enums.ScanState;
+import uk.co.ams.certplatform.domain.model.Account;
+import uk.co.ams.certplatform.domain.model.DiscoveryResult;
+import uk.co.ams.certplatform.domain.model.Scan;
+import uk.co.ams.certplatform.domain.model.ScanContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -52,7 +52,7 @@ class ScanExecutorParallelTest {
     void shouldExecuteRegionsConcurrently() throws InterruptedException {
         Scan scan = new Scan();
         scan.setId("scan-1");
-        scan.setScopeType(com.example.certplatform.domain.enums.ScanScopeType.ACCOUNT);
+        scan.setScopeType(uk.co.ams.certplatform.domain.enums.ScanScopeType.ACCOUNT);
         scan.setAccountIds(Collections.singletonList("acc-1"));
         scan.setRegions(Arrays.asList("eu-west-1", "eu-west-2"));
         scan.setServices(Collections.singletonList("ACM"));
@@ -62,7 +62,7 @@ class ScanExecutorParallelTest {
         Account account = new Account();
         account.setId("acc-1");
         account.setProviderId("prov-1");
-        account.setAuthType(com.example.certplatform.domain.enums.AccountAuthType.TOKEN);
+        account.setAuthType(uk.co.ams.certplatform.domain.enums.AccountAuthType.TOKEN);
         when(accountRepositoryPort.findById("acc-1")).thenReturn(Optional.of(account));
         
         // Mock registry to return ACM strategy
@@ -91,7 +91,7 @@ class ScanExecutorParallelTest {
     void shouldHandlePartialFailure() {
         Scan scan = new Scan();
         scan.setId("scan-2");
-        scan.setScopeType(com.example.certplatform.domain.enums.ScanScopeType.ACCOUNT);
+        scan.setScopeType(uk.co.ams.certplatform.domain.enums.ScanScopeType.ACCOUNT);
         scan.setAccountIds(Collections.singletonList("acc-1"));
         scan.setRegions(Collections.singletonList("eu-west-1"));
         scan.setServices(Arrays.asList("ACM", "EC2"));

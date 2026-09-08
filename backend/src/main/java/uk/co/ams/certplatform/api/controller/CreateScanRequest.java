@@ -1,6 +1,6 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
-import com.example.certplatform.domain.enums.ScanScopeType;
+import uk.co.ams.certplatform.domain.enums.ScanScopeType;
 import java.util.List;
 
 public record CreateScanRequest(

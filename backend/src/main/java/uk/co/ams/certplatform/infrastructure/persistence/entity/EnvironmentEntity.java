@@ -1,4 +1,4 @@
-package com.example.certplatform.infrastructure.persistence.entity;
+package uk.co.ams.certplatform.infrastructure.persistence.entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

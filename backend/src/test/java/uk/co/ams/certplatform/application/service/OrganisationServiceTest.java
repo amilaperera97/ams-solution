@@ -1,7 +1,7 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.OrganisationRepositoryPort;
-import com.example.certplatform.domain.model.Organisation;
+import uk.co.ams.certplatform.application.port.OrganisationRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Organisation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

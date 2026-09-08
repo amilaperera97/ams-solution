@@ -1,7 +1,7 @@
-package com.example.certplatform.api.controller;
+package uk.co.ams.certplatform.api.controller;
 
-import com.example.certplatform.application.service.ScanService;
-import com.example.certplatform.domain.model.Scan;
+import uk.co.ams.certplatform.application.service.ScanService;
+import uk.co.ams.certplatform.domain.model.Scan;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

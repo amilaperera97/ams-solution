@@ -1,4 +1,4 @@
-package com.example.certplatform.application.port;
+package uk.co.ams.certplatform.application.port;
 
 public interface ScanJobPublisher {
     void publish(String scanId);

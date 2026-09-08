@@ -1,13 +1,13 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.AccountRepositoryPort;
-import com.example.certplatform.application.port.EnvironmentRepositoryPort;
-import com.example.certplatform.application.port.ProviderRepositoryPort;
-import com.example.certplatform.domain.enums.AccountAuthType;
-import com.example.certplatform.domain.model.Account;
-import com.example.certplatform.domain.model.Environment;
-import com.example.certplatform.domain.model.Provider;
-import com.example.certplatform.domain.model.ConnectionTestResult;
+import uk.co.ams.certplatform.application.port.AccountRepositoryPort;
+import uk.co.ams.certplatform.application.port.EnvironmentRepositoryPort;
+import uk.co.ams.certplatform.application.port.ProviderRepositoryPort;
+import uk.co.ams.certplatform.domain.enums.AccountAuthType;
+import uk.co.ams.certplatform.domain.model.Account;
+import uk.co.ams.certplatform.domain.model.Environment;
+import uk.co.ams.certplatform.domain.model.Provider;
+import uk.co.ams.certplatform.domain.model.ConnectionTestResult;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;

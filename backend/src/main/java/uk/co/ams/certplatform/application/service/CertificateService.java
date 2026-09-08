@@ -1,7 +1,7 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.CertificateRepositoryPort;
-import com.example.certplatform.domain.model.Certificate;
+import uk.co.ams.certplatform.application.port.CertificateRepositoryPort;
+import uk.co.ams.certplatform.domain.model.Certificate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

@@ -1,7 +1,7 @@
-package com.example.certplatform.application.service;
+package uk.co.ams.certplatform.application.service;
 
-import com.example.certplatform.application.port.CertificateDiscoveryStrategy;
-import com.example.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.application.port.CertificateDiscoveryStrategy;
+import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
