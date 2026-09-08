@@ -11,7 +11,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        // Overridable so start.sh can run the backend on a non-default port.
+        target: process.env.BACKEND_PROXY_TARGET || 'http://localhost:8080',
         changeOrigin: true,
       }
     }
