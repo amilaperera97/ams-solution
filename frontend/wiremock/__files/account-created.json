@@ -1,8 +1,16 @@
 {
   "id": "acc-mock",
   "name": "Mock Account",
+  "providerId": "aws-provider-001",
   "provider": "AWS",
+  "environmentId": "env-dev",
   "environment": "DEV",
+  "accountId": "123456789012",
+  "authType": "IAM_ROLE",
+  "region": "eu-west-2",
+  "credentialsConfigured": true,
+  "roleArnConfigured": true,
+  "externalIdConfigured": false,
   "status": "Active",
   "certificatesCount": 0
 }

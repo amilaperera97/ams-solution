@@ -56,11 +56,9 @@ public class AccountService {
         Provider provider = providerRepositoryPort.findById(env.getProviderId())
             .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + env.getProviderId()));
 
-        AccountCredentials creds = credentials != null ? credentials : AccountCredentials.none();
-        CloudProviderType providerType = provider.getType();
-        boolean realMode = cloudProviderProperties.isReal(providerType);
+        AccountCredentials creds = (credentials != null ? credentials : AccountCredentials.none()).trimmed();
 
-        validate(accountId, authType, creds, providerType, realMode);
+        validate(accountId, authType, creds, provider.getType());
 
         Account account = new Account();
         account.setId("acc-" + UUID.randomUUID());
@@ -69,26 +67,60 @@ public class AccountService {
         account.setEnvironmentId(environmentId);
         account.setName(name);
         account.setAccountId(accountId);
-        account.setAuthType(authType);
-
-        // Secrets are encrypted on the way into the database by AccountRepositoryAdapter.
-        account.setToken(creds.token());
-        account.setRoleArn(creds.roleArn());
-        account.setExternalId(creds.externalId());
-        account.setAccessKeyId(trimToNull(creds.accessKeyId()));
-        account.setSecretAccessKey(trimToNull(creds.secretAccessKey()));
-        account.setRegion(trimToNull(creds.region()));
-
         account.setStatus("ACTIVE");
         account.setCreatedAt(Instant.now());
         account.setUpdatedAt(Instant.now());
+        apply(account, authType, creds);
 
         return accountRepositoryPort.save(account);
     }
 
+    /**
+     * Applies a partial change. Anything the caller left null or blank keeps the value
+     * already stored, so a client that has never been shown a secret (they are not in
+     * any API response) can still edit the account without wiping it.
+     */
+    public Account updateAccount(String id, String name, String accountId,
+                                 AccountAuthType authType, AccountCredentials credentials) {
+        Account existing = accountRepositoryPort.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Account not found: " + id));
+
+        Provider provider = providerRepositoryPort.findById(existing.getProviderId())
+            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + existing.getProviderId()));
+
+        AccountCredentials merged = (credentials != null ? credentials : AccountCredentials.none())
+                .trimmed()
+                .mergedOver(AccountCredentials.of(existing));
+        AccountAuthType effectiveAuthType = authType != null ? authType : existing.getAuthType();
+        String effectiveAccountId = isPresent(accountId) ? accountId.trim() : existing.getAccountId();
+
+        validate(effectiveAccountId, effectiveAuthType, merged, provider.getType());
+
+        if (isPresent(name)) {
+            existing.setName(name.trim());
+        }
+        existing.setAccountId(effectiveAccountId);
+        existing.setUpdatedAt(Instant.now());
+        apply(existing, effectiveAuthType, merged);
+
+        return accountRepositoryPort.save(existing);
+    }
+
+    /** Secrets are encrypted on the way into the database by AccountRepositoryAdapter. */
+    private void apply(Account account, AccountAuthType authType, AccountCredentials creds) {
+        account.setAuthType(authType);
+        account.setToken(creds.token());
+        account.setRoleArn(creds.roleArn());
+        account.setExternalId(creds.externalId());
+        account.setAccessKeyId(creds.accessKeyId());
+        account.setSecretAccessKey(creds.secretAccessKey());
+        account.setRegion(creds.region());
+    }
+
     private void validate(String accountId, AccountAuthType authType, AccountCredentials creds,
-                          CloudProviderType providerType, boolean realMode) {
+                          CloudProviderType providerType) {
         boolean aws = providerType == CloudProviderType.AWS;
+        boolean realMode = cloudProviderProperties.isReal(providerType);
 
         if (aws) {
             if (accountId == null || !accountId.matches("\\d{12}")) {
@@ -178,9 +210,5 @@ public class AccountService {
 
     private static boolean isPresent(String value) {
         return value != null && !value.isBlank();
-    }
-
-    private static String trimToNull(String value) {
-        return isPresent(value) ? value.trim() : null;
     }
 }

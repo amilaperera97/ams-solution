@@ -1,0 +1,5 @@
+{
+  "AWS": { "mode": "MOCK", "defaultRegion": "eu-west-2", "endpointOverridden": true },
+  "AZURE": { "mode": "MOCK", "defaultRegion": "us-east-1", "endpointOverridden": true },
+  "GCP": { "mode": "MOCK", "defaultRegion": "us-east-1", "endpointOverridden": true }
+}

@@ -2,6 +2,35 @@ import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '../services/api';
+import type { AccountAuthType, CloudProviderConfigMap } from '../types';
+
+const AUTH_LABELS: Record<AccountAuthType, string> = {
+  TOKEN: 'TOKEN',
+  IAM_ROLE: 'IAM ROLE',
+  ACCESS_KEY: 'ACCESS KEY',
+};
+
+// Mirrors the patterns AccountService validates with, so the operator is told what
+// is wrong before the request is made rather than after the backend rejects it.
+const AWS_ACCOUNT_ID = /^\d{12}$/;
+const AWS_ROLE_ARN = /^arn:aws[a-z-]*:iam::\d{12}:role\/.+$/;
+const AWS_REGION = /^[a-z]{2}(-[a-z]+){1,2}-\d$/;
+const AWS_ACCESS_KEY_ID = /^(AKIA|ASIA)[A-Z0-9]{16}$/;
+
+const emptyForm = {
+  name: '',
+  provider: '',
+  environmentId: '',
+  accountId: '',
+  authType: 'IAM_ROLE' as AccountAuthType,
+  token: '',
+  roleArn: '',
+  externalId: '',
+  accessKeyId: '',
+  secretAccessKey: '',
+  region: '',
+  status: 'Active',
+};
 
 const Accounts: React.FC = () => {
   const queryClient = useQueryClient();
@@ -11,18 +40,9 @@ const Accounts: React.FC = () => {
   const [accountToDelete, setAccountToDelete] = useState<any | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{success: boolean, message: string} | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    provider: 'AWS', 
-    environmentId: 'env-prod', 
-    accountId: '',
-    authType: 'TOKEN',
-    token: '',
-    roleArn: '',
-    status: 'Active' 
-  });
+  const [formData, setFormData] = useState(emptyForm);
 
   const [selectedProviderId, setSelectedProviderId] = useState<string>('');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>('');
@@ -36,6 +56,14 @@ const Accounts: React.FC = () => {
     queryKey: ['providers', org?.id],
     queryFn: () => fetchApi<any[]>(`/api/v1/organisations/${org?.id}/providers`),
     enabled: !!org?.id,
+  });
+
+  // Tells us whether AWS is wired to real AWS or to the simulator. TOKEN cannot reach
+  // real AWS, so the form must not offer it once the backend is in REAL mode.
+  const { data: providerConfig } = useQuery({
+    queryKey: ['cloud-provider-config'],
+    queryFn: () => fetchApi<CloudProviderConfigMap>('/api/v1/config/cloud-providers'),
+    retry: false,
   });
 
   React.useEffect(() => {
@@ -66,17 +94,46 @@ const Accounts: React.FC = () => {
     enabled: !!selectedEnvironmentId,
   });
 
+  // The form's provider select holds a provider id; fall back to the value itself so a
+  // literal type ("AWS") still resolves, which is how the older fixtures are shaped.
+  const providerType: string = (
+    providers?.find((p: any) => p.id === formData.provider)?.type || formData.provider || ''
+  ).toString().toUpperCase();
+  const isAws = providerType === 'AWS';
+  const providerMode = providerConfig?.[providerType]?.mode ?? 'MOCK';
+  // Real AWS: STS only understands signed requests, never a bearer token.
+  const isRealAws = isAws && providerMode === 'REAL';
+  const tokenAvailable = !isRealAws;
 
+  // Which secrets the account already holds. They are never returned by the API, so
+  // "already configured" is all the form can know - and all it needs, because leaving
+  // a secret blank tells the backend to keep what it has.
+  const storedRoleArn = !!accountToEdit?.roleArnConfigured;
+  const storedExternalId = !!accountToEdit?.externalIdConfigured;
+  const storedAccessKey = !!accountToEdit?.accessKeyId;
+  const storedToken = accountToEdit?.authType === 'TOKEN' && !!accountToEdit?.credentialsConfigured;
 
   const saveAccMutation = useMutation({
-    mutationFn: (acc: any) => {
-      const payload = { 
+    mutationFn: (acc: typeof emptyForm) => {
+      // Only fields the operator actually filled in are sent. On an update an omitted
+      // field means "leave the stored value alone"; on a create there is nothing to keep.
+      const payload: Record<string, unknown> = {
         name: acc.name,
         accountId: acc.accountId,
         authType: acc.authType,
-        token: acc.authType === 'TOKEN' ? acc.token : undefined,
-        roleArn: acc.authType === 'IAM_ROLE' ? acc.roleArn : undefined
       };
+
+      if (acc.authType === 'TOKEN') {
+        payload.token = acc.token || undefined;
+      } else if (acc.authType === 'IAM_ROLE') {
+        payload.roleArn = acc.roleArn || undefined;
+        payload.externalId = acc.externalId || undefined;
+        payload.region = acc.region || undefined;
+      } else if (acc.authType === 'ACCESS_KEY') {
+        payload.accessKeyId = acc.accessKeyId || undefined;
+        payload.secretAccessKey = acc.secretAccessKey || undefined;
+        payload.region = acc.region || undefined;
+      }
 
       if (accountToEdit) {
         return fetchApi(`/api/v1/accounts/${accountToEdit.id}`, {
@@ -128,29 +185,67 @@ const Accounts: React.FC = () => {
   });
 
   const resetForm = () => {
-    setFormData({ 
-      name: '', 
-      provider: selectedProviderId || '', 
-      environmentId: selectedEnvironmentId || '', 
-      accountId: '',
-      authType: 'TOKEN',
-      token: '',
-      roleArn: '',
-      status: 'Active' 
+    setFormData({
+      ...emptyForm,
+      provider: selectedProviderId || '',
+      environmentId: selectedEnvironmentId || '',
+      authType: tokenAvailable ? emptyForm.authType : 'IAM_ROLE',
     });
     setConnectionStatus(null);
-    setValidationError(null);
+    setErrors({});
   };
 
   const validateForm = () => {
-    if (formData.provider === 'AWS') {
-      if (!/^\d{12}$/.test(formData.accountId)) {
-        setValidationError('Account ID must contain exactly 12 digits.');
-        return false;
+    const found: Record<string, string> = {};
+
+    if (isAws && !AWS_ACCOUNT_ID.test(formData.accountId.trim())) {
+      found.accountId = 'Account ID must contain exactly 12 digits.';
+    } else if (!isAws && !formData.accountId.trim()) {
+      found.accountId = 'Account ID is required.';
+    }
+
+    if (formData.authType === 'TOKEN') {
+      if (!tokenAvailable) {
+        found.authType = 'Token authentication cannot reach real AWS. Use IAM Role or Access Key.';
+      }
+      if (!formData.token.trim() && !storedToken) {
+        found.token = 'Token is required when authentication is Token.';
       }
     }
-    setValidationError(null);
-    return true;
+
+    if (formData.authType === 'IAM_ROLE') {
+      const roleArn = formData.roleArn.trim();
+      if (!roleArn && !storedRoleArn) {
+        found.roleArn = 'Role ARN is required when authentication is IAM Role.';
+      } else if (roleArn && isAws && !AWS_ROLE_ARN.test(roleArn)) {
+        found.roleArn = 'Role ARN must look like arn:aws:iam::123456789012:role/RoleName.';
+      }
+    }
+
+    if (formData.authType === 'ACCESS_KEY') {
+      const accessKeyId = formData.accessKeyId.trim();
+      if (!accessKeyId && !storedAccessKey) {
+        found.accessKeyId = 'Access key ID is required when authentication is Access Key.';
+      } else if (accessKeyId && isAws && !AWS_ACCESS_KEY_ID.test(accessKeyId)) {
+        found.accessKeyId = 'Access key ID must be 20 characters starting with AKIA or ASIA.';
+      }
+      if (!formData.secretAccessKey.trim() && !storedAccessKey) {
+        found.secretAccessKey = 'Secret access key is required when authentication is Access Key.';
+      }
+    }
+
+    if (formData.authType !== 'TOKEN') {
+      const region = formData.region.trim();
+      if (!region) {
+        // Only REAL mode has to reach an actual regional endpoint.
+        if (isRealAws) found.region = 'Region is required for real AWS accounts, e.g. eu-west-2.';
+      } else if (isAws && !AWS_REGION.test(region)) {
+        found.region = 'Region must look like an AWS region, e.g. eu-west-2.';
+      }
+    }
+
+    setErrors(found);
+    return Object.keys(found).length === 0;
   };
 
   const handleSaveSubmit = (e: React.FormEvent) => {
@@ -168,18 +263,20 @@ const Accounts: React.FC = () => {
 
   const openEditModal = (acc: any) => {
     setAccountToEdit(acc);
-    setFormData({ 
-      name: acc.name || '', 
-      provider: acc.provider || 'AWS', 
-      environmentId: acc.environmentId || acc.environment || 'env-prod', 
+    setFormData({
+      ...emptyForm,
+      name: acc.name || '',
+      provider: acc.providerId || acc.provider || '',
+      environmentId: acc.environmentId || acc.environment || '',
       accountId: acc.accountId || '',
-      authType: acc.authType || 'TOKEN',
-      token: acc.token || '',
-      roleArn: acc.roleArn || acc.connectionDetails?.roleArn || '',
-      status: acc.status || 'Active' 
+      authType: (acc.authType as AccountAuthType) || 'IAM_ROLE',
+      region: acc.region || '',
+      status: acc.status || 'Active',
+      // token, roleArn, externalId, accessKeyId and secretAccessKey stay blank: the API
+      // does not return them, and blank means "keep what is stored".
     });
     setConnectionStatus(null);
-    setValidationError(null);
+    setErrors({});
     setIsModalOpen(true);
   };
 
@@ -188,6 +285,17 @@ const Accounts: React.FC = () => {
     setDeleteError(null);
     setIsDeleteModalOpen(true);
   };
+
+  const field = (name: string) =>
+    `w-full bg-gray-900 border ${errors[name] ? 'border-red-500' : 'border-gray-700'} rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white`;
+
+  // Each message sits under the field it is about - the modal is short enough that a
+  // separate summary would only repeat itself.
+  const fieldError = (name: string) =>
+    errors[name] ? <p role="alert" className="mt-1 text-sm text-red-400">{errors[name]}</p> : null;
+
+  const keepBlankHint = (configured: boolean) =>
+    configured ? <p className="mt-1 text-xs text-gray-400">Already configured. Leave blank to keep it.</p> : null;
 
   return (
     <Layout>
@@ -246,6 +354,7 @@ const Accounts: React.FC = () => {
                   <th className="p-3 text-sm font-semibold text-gray-300">Account ID</th>
                   <th className="p-3 text-sm font-semibold text-gray-300">Provider</th>
                   <th className="p-3 text-sm font-semibold text-gray-300">Environment</th>
+                  <th className="p-3 text-sm font-semibold text-gray-300">Region</th>
                   <th className="p-3 text-sm font-semibold text-gray-300">Auth</th>
                   <th className="p-3 text-sm font-semibold text-gray-300">Status</th>
                   <th className="p-3 text-sm font-semibold text-gray-300 text-right">Certificates</th>
@@ -259,7 +368,8 @@ const Accounts: React.FC = () => {
                     <td className="p-3 text-sm text-gray-400">{acc.accountId || '-'}</td>
                     <td className="p-3 text-sm text-gray-400">{acc.provider}</td>
                     <td className="p-3 text-sm text-gray-400">{acc.environmentId || acc.environment}</td>
-                    <td className="p-3 text-sm text-gray-400">{acc.authType === 'IAM_ROLE' ? 'IAM ROLE' : 'TOKEN'}</td>
+                    <td className="p-3 text-sm text-gray-400">{acc.region || '-'}</td>
+                    <td className="p-3 text-sm text-gray-400">{AUTH_LABELS[acc.authType as AccountAuthType] || acc.authType || '-'}</td>
                     <td className="p-3 text-sm">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         acc.status === 'Active' || acc.status === 'CONNECTED' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
@@ -284,12 +394,6 @@ const Accounts: React.FC = () => {
             <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-6 w-full max-w-md my-8">
               <h3 className="text-xl font-bold mb-4">{accountToEdit ? 'Edit Account' : 'Add Account'}</h3>
               
-              {validationError && (
-                <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-md text-red-400 text-sm">
-                  {validationError}
-                </div>
-              )}
-
               <form onSubmit={handleSaveSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -348,25 +452,28 @@ const Accounts: React.FC = () => {
                     required
                     value={formData.accountId}
                     onChange={e => setFormData({...formData, accountId: e.target.value})}
-                    className={`w-full bg-gray-900 border ${validationError ? 'border-red-500' : 'border-gray-700'} rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white`}
+                    className={field('accountId')}
                     placeholder="123456789012"
                   />
+                  {fieldError('accountId')}
                 </div>
 
                 <div className="pt-2 border-t border-gray-700">
                   <label className="block text-sm font-medium mb-2">Authentication Type</label>
                   <div className="flex space-x-6">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="authType" 
-                        value="TOKEN" 
-                        checked={formData.authType === 'TOKEN'}
-                        onChange={() => setFormData({...formData, authType: 'TOKEN'})}
-                        className="text-blue-600 focus:ring-blue-500" 
-                      />
-                      <span>Token</span>
-                    </label>
+                    {tokenAvailable && (
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="authType" 
+                          value="TOKEN" 
+                          checked={formData.authType === 'TOKEN'}
+                          onChange={() => setFormData({...formData, authType: 'TOKEN'})}
+                          className="text-blue-600 focus:ring-blue-500" 
+                        />
+                        <span>Token</span>
+                      </label>
+                    )}
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input 
                         type="radio" 
@@ -378,34 +485,128 @@ const Accounts: React.FC = () => {
                       />
                       <span>IAM Role</span>
                     </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="authType" 
+                        value="ACCESS_KEY" 
+                        checked={formData.authType === 'ACCESS_KEY'}
+                        onChange={() => setFormData({...formData, authType: 'ACCESS_KEY'})}
+                        className="text-blue-600 focus:ring-blue-500" 
+                      />
+                      <span>Access Key</span>
+                    </label>
                   </div>
+                  {isRealAws && (
+                    <p className="mt-2 text-xs text-gray-400">
+                      This AWS provider is in REAL mode, so token authentication is not offered - AWS only
+                      accepts signed requests. IAM Role is preferred; the backend assumes it with your local
+                      AWS identity unless bootstrap access keys are stored.
+                    </p>
+                  )}
+                  {fieldError('authType')}
                 </div>
 
-                {formData.authType === 'TOKEN' ? (
+                {formData.authType === 'TOKEN' && (
                   <div className="pt-2">
                     <label htmlFor="token" className="block text-sm font-medium mb-1">Token Value</label>
                     <input 
                       id="token" 
                       type="password" 
-                      required
                       value={formData.token}
                       onChange={e => setFormData({...formData, token: e.target.value})}
-                      className="w-full bg-gray-900 border border-gray-700 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                      className={field('token')}
                       placeholder="••••••••••••••••"
+                      autoComplete="new-password"
                     />
+                    {fieldError('token')}
+                    {keepBlankHint(storedToken)}
                   </div>
-                ) : (
-                  <div className="pt-2">
-                    <label htmlFor="roleArn" className="block text-sm font-medium mb-1">Role ARN</label>
+                )}
+
+                {formData.authType === 'IAM_ROLE' && (
+                  <>
+                    <div className="pt-2">
+                      <label htmlFor="roleArn" className="block text-sm font-medium mb-1">Role ARN</label>
+                      <input 
+                        id="roleArn" 
+                        type="text" 
+                        value={formData.roleArn}
+                        onChange={e => setFormData({...formData, roleArn: e.target.value})}
+                        className={field('roleArn')}
+                        placeholder="arn:aws:iam::123456789012:role/RoleName"
+                      />
+                      {fieldError('roleArn')}
+                      {keepBlankHint(storedRoleArn)}
+                    </div>
+                    <div>
+                      <label htmlFor="externalId" className="block text-sm font-medium mb-1">
+                        External ID <span className="text-gray-400 font-normal">(optional)</span>
+                      </label>
+                      <input 
+                        id="externalId" 
+                        type="text" 
+                        value={formData.externalId}
+                        onChange={e => setFormData({...formData, externalId: e.target.value})}
+                        className={field('externalId')}
+                        placeholder="Required only if the role's trust policy sets sts:ExternalId"
+                      />
+                      {keepBlankHint(storedExternalId)}
+                    </div>
+                  </>
+                )}
+
+                {formData.authType === 'ACCESS_KEY' && (
+                  <>
+                    <div className="pt-2">
+                      <label htmlFor="accessKeyId" className="block text-sm font-medium mb-1">Access Key ID</label>
+                      <input 
+                        id="accessKeyId" 
+                        type="text" 
+                        value={formData.accessKeyId}
+                        onChange={e => setFormData({...formData, accessKeyId: e.target.value})}
+                        className={field('accessKeyId')}
+                        placeholder="AKIAIOSFODNN7EXAMPLE"
+                        autoComplete="off"
+                      />
+                      {fieldError('accessKeyId')}
+                      {accountToEdit?.accessKeyId && (
+                        <p className="mt-1 text-xs text-gray-400">
+                          Currently {accountToEdit.accessKeyId}. Leave blank to keep it.
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label htmlFor="secretAccessKey" className="block text-sm font-medium mb-1">Secret Access Key</label>
+                      <input 
+                        id="secretAccessKey" 
+                        type="password" 
+                        value={formData.secretAccessKey}
+                        onChange={e => setFormData({...formData, secretAccessKey: e.target.value})}
+                        className={field('secretAccessKey')}
+                        placeholder="••••••••••••••••"
+                        autoComplete="new-password"
+                      />
+                      {fieldError('secretAccessKey')}
+                      {keepBlankHint(storedAccessKey)}
+                    </div>
+                  </>
+                )}
+
+                {formData.authType !== 'TOKEN' && (
+                  <div>
+                    <label htmlFor="region" className="block text-sm font-medium mb-1">
+                      {isAws ? 'AWS Region' : 'Region'}
+                    </label>
                     <input 
-                      id="roleArn" 
+                      id="region" 
                       type="text" 
-                      required
-                      value={formData.roleArn}
-                      onChange={e => setFormData({...formData, roleArn: e.target.value})}
-                      className="w-full bg-gray-900 border border-gray-700 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
-                      placeholder="arn:aws:iam::123456789012:role/RoleName"
+                      value={formData.region}
+                      onChange={e => setFormData({...formData, region: e.target.value})}
+                      className={field('region')}
+                      placeholder="eu-west-2"
                     />
+                    {fieldError('region')}
                   </div>
                 )}
 

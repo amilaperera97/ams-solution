@@ -10,6 +10,9 @@ import java.time.Instant;
  * secrets (token, secret access key) nor the role ARN, which AccountIntegrationTest
  * pins as non-exposed. The access key id is masked to its last four characters so
  * an operator can tell which key is configured without it being readable.
+ *
+ * The *Configured booleans let the edit form say "already set - leave blank to
+ * keep" for values it is deliberately not shown.
  */
 public class AccountResponse {
     private String id;
@@ -22,6 +25,8 @@ public class AccountResponse {
     private String region;
     private String accessKeyId;
     private boolean credentialsConfigured;
+    private boolean roleArnConfigured;
+    private boolean externalIdConfigured;
     private String status;
     private Instant createdAt;
     private Instant updatedAt;
@@ -38,8 +43,10 @@ public class AccountResponse {
         this.authType = account.getAuthType();
         this.region = account.getRegion();
         this.accessKeyId = SecretMasker.mask(account.getAccessKeyId());
+        this.roleArnConfigured = isPresent(account.getRoleArn());
+        this.externalIdConfigured = isPresent(account.getExternalId());
         this.credentialsConfigured = isPresent(account.getToken())
-                || isPresent(account.getRoleArn())
+                || this.roleArnConfigured
                 || (isPresent(account.getAccessKeyId()) && isPresent(account.getSecretAccessKey()));
         this.status = account.getStatus();
         this.createdAt = account.getCreatedAt();
@@ -60,6 +67,8 @@ public class AccountResponse {
     public String getRegion() { return region; }
     public String getAccessKeyId() { return accessKeyId; }
     public boolean isCredentialsConfigured() { return credentialsConfigured; }
+    public boolean isRoleArnConfigured() { return roleArnConfigured; }
+    public boolean isExternalIdConfigured() { return externalIdConfigured; }
     public String getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

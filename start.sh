@@ -19,6 +19,7 @@ RUN_BACKEND=true
 RUN_FRONTEND=true
 SKIP_INSTALL=false
 CLEAR_DB=false
+KILL_PORTS=true
 
 BACKEND_PID=""
 FRONTEND_PID=""
@@ -50,7 +51,12 @@ Usage:
   ./start.sh --backend-only
   ./start.sh --frontend-only
   ./start.sh --skip-install       don't run npm install even if node_modules is stale
+  ./start.sh --no-kill-ports      fail instead of killing whatever holds the ports
   ./start.sh --help
+
+Ports 8080 (backend) and 5173 (frontend) are freed automatically: anything still
+listening on them - usually a bootRun or vite left over from a previous run - is
+sent SIGTERM, then SIGKILL if it ignores that. Use --no-kill-ports to opt out.
 
 Data is kept between runs by default; --clear-db (alias --fresh) is the only thing
 that deletes it, and it only ever touches the database of the selected profile.
@@ -63,7 +69,13 @@ Env overrides:
   BACKEND_PORT (8080)  FRONTEND_PORT (5173)  SPRING_PROFILES_ACTIVE (dev)
   HEALTH_TIMEOUT (180)
   CERTPLATFORM_SECRET_KEY   required by qa; encrypts stored cloud credentials
+  AWS_PROFILE               identity the qa profile assumes IAM roles with
   AWS_ENDPOINT_OVERRIDE     point qa at LocalStack instead of real AWS
+
+Before running qa, check the AWS identity this shell will use:
+  aws sts get-caller-identity --profile qa && export AWS_PROFILE=qa
+It needs sts:AssumeRole on the account's role, and that role must trust it.
+Running on localhost does not keep the calls local - see README.md.
 USAGE
 }
 
@@ -74,6 +86,7 @@ while [[ $# -gt 0 ]]; do
     --frontend-only) RUN_BACKEND=false ;;
     --skip-install)  SKIP_INSTALL=true ;;
     --clear-db|--fresh) CLEAR_DB=true ;;
+    --no-kill-ports) KILL_PORTS=false ;;
     --profile)       [[ $# -ge 2 ]] || die "--profile needs a value (dev or qa)"
                      PROFILE="$2"; shift ;;
     --profile=*)     PROFILE="${1#*=}" ;;
@@ -116,10 +129,76 @@ port_in_use() {
   return 1
 }
 
+# PIDs listening on $1, one per line. Tries the tools in order of how precisely
+# they report listeners; every box has at least one of them.
+listener_pids() {
+  local port="$1" pids=""
+  if command -v lsof >/dev/null 2>&1; then
+    pids="$(lsof -t -i "TCP:$port" -s TCP:LISTEN 2>/dev/null || true)"
+  fi
+  if [[ -z "$pids" ]] && command -v ss >/dev/null 2>&1; then
+    pids="$(ss -lntpH "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u || true)"
+  fi
+  if [[ -z "$pids" ]] && command -v fuser >/dev/null 2>&1; then
+    pids="$(fuser -n tcp "$port" 2>/dev/null | tr -s ' ' '\n' || true)"
+  fi
+  # Never target ourselves or our own process group - that would kill this script.
+  local pid
+  for pid in $pids; do
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    (( pid == $$ || pid == 1 )) && continue
+    printf '%s\n' "$pid"
+  done | sort -u
+}
+
+# Frees $1 by terminating whatever listens on it: SIGTERM first, SIGKILL for
+# anything still holding the port a few seconds later.
+kill_port() {
+  local port="$1" what="$2"
+  local pids
+  pids="$(listener_pids "$port")"
+
+  if [[ -z "$pids" ]]; then
+    # Something answers on the port but we cannot see the owner: another user's
+    # process, or a container publishing it. Killing is not an option there.
+    die "Port $port ($what) is in use by a process we cannot identify (another user,
+       or a container publishing the port). Stop it, or re-run with a different port:
+       ${what^^}_PORT=<port> ./start.sh"
+  fi
+
+  warn "Port $port ($what) is in use by pid(s) $(tr '\n' ' ' <<<"$pids" | sed 's/ $//'); terminating."
+  local pid
+  for pid in $pids; do
+    ps -o pid=,command= -p "$pid" 2>/dev/null | sed 's/^ */  killing /' || true
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+
+  for _ in $(seq 1 20); do
+    port_in_use "$port" || { ok "Port $port is free."; return 0; }
+    sleep 0.5
+  done
+
+  warn "Port $port still busy after SIGTERM; sending SIGKILL."
+  for pid in $(listener_pids "$port"); do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+
+  for _ in $(seq 1 10); do
+    port_in_use "$port" || { ok "Port $port is free."; return 0; }
+    sleep 0.5
+  done
+  die "Could not free port $port ($what). Stop the process by hand, or re-run with:
+       ${what^^}_PORT=<port> ./start.sh"
+}
+
 require_free_port() {
   local port="$1" what="$2"
-  if port_in_use "$port"; then
-    die "Port $port ($what) is already in use. Stop that process, or re-run with a different port:
+  port_in_use "$port" || return 0
+  if $KILL_PORTS; then
+    kill_port "$port" "$what"
+  else
+    die "Port $port ($what) is already in use. Stop that process, re-run without
+       --no-kill-ports to have start.sh free it, or use a different port:
        ${what^^}_PORT=<port> ./start.sh"
   fi
 }
@@ -178,6 +257,17 @@ if $RUN_BACKEND; then
     die "The qa profile stores real cloud credentials and needs an encryption key.
        Generate one, then keep it safe - stored credentials cannot be read back without it:
          export CERTPLATFORM_SECRET_KEY=\"\$(openssl rand -base64 32)\""
+  fi
+
+  # qa assumes IAM roles with whatever the AWS SDK's default credential chain finds.
+  # Warn rather than die: env credentials, an SSO session or LocalStack are all valid
+  # ways to run without AWS_PROFILE set.
+  if [[ "$PROFILE" == "qa" && -z "${AWS_PROFILE:-}" && -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
+    warn "No AWS_PROFILE or AWS_ACCESS_KEY_ID exported. IAM_ROLE accounts assume their role
+       with the SDK's default credential chain, which will have nothing to sign with.
+       Check the identity first, then export it:
+         aws sts get-caller-identity --profile qa
+         export AWS_PROFILE=qa"
   fi
 
   if $CLEAR_DB; then

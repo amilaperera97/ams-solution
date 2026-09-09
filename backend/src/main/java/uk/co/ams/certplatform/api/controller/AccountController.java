@@ -31,6 +31,18 @@ public class AccountController {
         return ResponseEntity.status(HttpStatus.CREATED).body(new AccountResponse(created));
     }
 
+    @PutMapping("/accounts/{id}")
+    public ResponseEntity<AccountResponse> updateAccount(@PathVariable String id, @RequestBody UpdateAccountRequest request) {
+        Account updated = accountService.updateAccount(
+            id,
+            request.name(),
+            request.accountId(),
+            request.authType(),
+            request.toCredentials()
+        );
+        return ResponseEntity.ok(new AccountResponse(updated));
+    }
+
     @GetMapping("/environments/{environmentId}/accounts")
     public ResponseEntity<List<AccountResponse>> getAccountsByEnvironment(@PathVariable String environmentId) {
         List<AccountResponse> accounts = accountService.getAccountsByEnvironmentId(environmentId).stream()

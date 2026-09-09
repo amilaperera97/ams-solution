@@ -99,30 +99,56 @@ public class AwsClientFactory {
     }
 
     private AwsCredentialsProvider assumeRole(Account account, String region) {
-        if (account.getRoleArn() == null || account.getRoleArn().isBlank()) {
-            throw new IllegalStateException("Account " + account.getId() + " is IAM_ROLE but has no role ARN");
-        }
-        AwsCredentialsProvider baseCredentials = hasAccessKey(account)
-                ? StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(account.getAccessKeyId(), account.getSecretAccessKey()))
-                : DefaultCredentialsProvider.create();
-
-        AssumeRoleRequest.Builder request = AssumeRoleRequest.builder()
-                .roleArn(account.getRoleArn())
-                .roleSessionName("certplatform-" + shortId(account.getId()))
-                .durationSeconds(3600);
-        if (account.getExternalId() != null && !account.getExternalId().isBlank()) {
-            request.externalId(account.getExternalId());
-        }
-
         try (StsClient base = configure(StsClient.builder(), region)
-                .credentialsProvider(baseCredentials)
+                .credentialsProvider(baseCredentialsFor(account))
                 .build()) {
-            AssumeRoleResponse response = base.assumeRole(request.build());
+            AssumeRoleResponse response = base.assumeRole(assumeRoleRequestFor(account));
             Credentials issued = response.credentials();
             return StaticCredentialsProvider.create(AwsSessionCredentials.create(
                     issued.accessKeyId(), issued.secretAccessKey(), issued.sessionToken()));
         }
+    }
+
+    /**
+     * The identity that calls STS AssumeRole for an IAM_ROLE account.
+     *
+     * <p>Access keys stored on the account are optional bootstrap credentials; they
+     * are used only when present. Otherwise we fall back to the SDK's
+     * {@link DefaultCredentialsProvider} chain, which is what makes IAM_ROLE work on
+     * a developer machine: it resolves, in order, environment credentials
+     * ({@code AWS_ACCESS_KEY_ID}/{@code AWS_SECRET_ACCESS_KEY}/{@code AWS_SESSION_TOKEN}),
+     * the Java system properties, the web identity token file, then the profile named
+     * by {@code AWS_PROFILE} in {@code ~/.aws/credentials} and {@code ~/.aws/config}
+     * - including SSO profiles, provided {@code aws sso login} has been run - and
+     * finally container/instance metadata when running inside AWS.
+     *
+     * <p>Whichever identity the chain resolves must be allowed to call
+     * {@code sts:AssumeRole} on the account's role ARN, and that role's trust policy
+     * must name the identity (or its account) as a principal. Without both, AWS
+     * answers AccessDenied and the scan or connection test fails.
+     */
+    AwsCredentialsProvider baseCredentialsFor(Account account) {
+        if (hasAccessKey(account)) {
+            return StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(account.getAccessKeyId(), account.getSecretAccessKey()));
+        }
+        return DefaultCredentialsProvider.create();
+    }
+
+    /** Built separately from the call so the external-id and session-name rules can be tested offline. */
+    AssumeRoleRequest assumeRoleRequestFor(Account account) {
+        if (account.getRoleArn() == null || account.getRoleArn().isBlank()) {
+            throw new IllegalStateException("Account " + account.getId() + " is IAM_ROLE but has no role ARN");
+        }
+        AssumeRoleRequest.Builder request = AssumeRoleRequest.builder()
+                .roleArn(account.getRoleArn())
+                .roleSessionName("certplatform-" + shortId(account.getId()))
+                .durationSeconds(3600);
+        // Required when the target role's trust policy sets a sts:ExternalId condition.
+        if (account.getExternalId() != null && !account.getExternalId().isBlank()) {
+            request.externalId(account.getExternalId());
+        }
+        return request.build();
     }
 
     private static boolean hasAccessKey(Account account) {
