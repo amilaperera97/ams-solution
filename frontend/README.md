@@ -10,7 +10,11 @@ A multi-cloud certificate discovery and inventory platform built with React, Vit
 
 ## Prerequisites
 - Node.js >= 18
-- Docker Desktop or Docker Engine & Docker Compose
+- Docker, only for the WireMock quick start below
+
+> Working against the real Spring Boot backend instead needs no Docker at all: run
+> `./start.sh` from the repository root (see the root README for `--mode docker`, which
+> is the opt-in, not the default). WireMock is for frontend-only work and the E2E suite.
 
 ## Quick Start
 

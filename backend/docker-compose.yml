@@ -1,5 +1,5 @@
-version: '3.8'
-
+# Backend container, driven by ../start.sh --mode docker. Every variable below falls
+# back to the same default that script uses, so plain `docker compose up` still works.
 services:
   backend:
     build:
@@ -7,9 +7,26 @@ services:
       dockerfile: Dockerfile
     container_name: certplatform-backend
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=dev
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      # The image's workdir is /app, so the profiles' relative SQLite paths would put
+      # the database in the container's own filesystem and lose it on every rebuild.
+      # Redirect both the datasource and Flyway onto the mounted volume instead.
+      SPRING_DATASOURCE_URL: jdbc:sqlite:/app/data/certplatform-${SPRING_PROFILES_ACTIVE:-dev}.db
+      SPRING_FLYWAY_URL: jdbc:sqlite:/app/data/certplatform-${SPRING_PROFILES_ACTIVE:-dev}.db
+      # Encrypts stored cloud credentials. The qa profile refuses to start without it.
+      CERTPLATFORM_SECRET_KEY: ${CERTPLATFORM_SECRET_KEY:-}
+      # Forwarded from the host shell only when set. AWS_PROFILE additionally needs
+      # ~/.aws inside the container - see docker-compose.aws.yml.
+      AWS_PROFILE:
+      AWS_REGION:
+      AWS_ACCESS_KEY_ID:
+      AWS_SECRET_ACCESS_KEY:
+      AWS_SESSION_TOKEN:
+      # localhost means the container here, so a LocalStack running on the host has to
+      # be addressed as http://host.docker.internal:4566 rather than http://localhost:4566.
+      AWS_ENDPOINT_OVERRIDE:
     volumes:
       - certplatform-data:/app/data
     restart: unless-stopped

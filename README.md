@@ -1,7 +1,7 @@
 # Certificate Discovery Platform
 
 Spring Boot backend (`backend/`) plus a Vite/React frontend (`frontend/frontend/`).
-`./start.sh` runs both.
+`./start.sh` runs both, with or without Docker.
 
 ## Profiles
 
@@ -15,6 +15,49 @@ Spring Boot backend (`backend/`) plus a Vite/React frontend (`frontend/frontend/
 ./start.sh --profile qa     # real AWS
 ./start.sh --help           # every flag
 ```
+
+## Running with or without Docker
+
+Nothing here needs Docker installed. By default `./start.sh` runs the backend straight
+from Gradle and the frontend from Vite, so a JDK 21 and Node.js >= 18 are the only
+prerequisites. `--mode docker` moves the backend into a container for anyone who would
+rather not have a JDK on their machine.
+
+| Mode | Backend | Frontend | Database | Requires |
+|------|---------|----------|----------|----------|
+| `native` (default) | `./gradlew bootRun` | `npm run dev` | `backend/certplatform-<profile>.db` | JDK 21, Node.js >= 18 |
+| `docker` | container built from `backend/docker-compose.yml` | `npm run dev` on the host | `certplatform-data` Docker volume | Docker + Compose, Node.js >= 18 |
+
+```bash
+./start.sh                     # native - no Docker involved
+./start.sh --mode docker       # backend in a container (--docker is the same)
+./start.sh --no-docker         # native, spelled out (--native, --local too)
+START_MODE=docker ./start.sh   # or set it in your shell profile
+```
+
+Both modes take the same flags: `--profile`, `--clear-db`, `--backend-only`,
+`--frontend-only`, `--no-kill-ports`, and the same `BACKEND_PORT` / `FRONTEND_PORT`
+overrides. Either way Ctrl+C stops everything it started, and both services' output is
+tailed from `logs/`.
+
+The frontend always runs on the host - there is no frontend image - so Node.js is
+required in both modes. `--clear-db` deletes the selected profile's SQLite file in
+native mode; in docker mode it removes the `certplatform-data` volume, which holds the
+database of every profile that has run in a container.
+
+### What the container gets
+
+`SPRING_DATASOURCE_URL` and `SPRING_FLYWAY_URL` are redirected onto
+`/app/data/certplatform-<profile>.db` on the volume, because the profiles' relative
+SQLite paths would otherwise write into the container's own filesystem and be lost on
+the next rebuild. `CERTPLATFORM_SECRET_KEY` and any `AWS_*` variables are passed
+through from your shell, and on `qa` - when `~/.aws` exists - it is mounted read-only
+at `/root/.aws` (`backend/docker-compose.aws.yml`) so `AWS_PROFILE` and SSO sessions
+resolve inside the container the way they do natively.
+
+One difference worth knowing: `AWS_ENDPOINT_OVERRIDE=http://localhost:4566` points at
+the container itself, not your machine. Use `http://host.docker.internal:4566` to reach
+a LocalStack running on the host.
 
 ## Account authentication
 
@@ -104,7 +147,7 @@ profile refuses to start without one.
 ### 5. Start the stack
 
 ```bash
-./start.sh --profile qa
+./start.sh --profile qa                 # or: ./start.sh --profile qa --mode docker
 ```
 
 Backend on `http://localhost:8080`, frontend on `http://localhost:5173`.

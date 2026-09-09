@@ -1,0 +1,8 @@
+# Overlay that ../start.sh --mode docker --profile qa adds when ~/.aws exists.
+# qa assumes IAM roles with the AWS SDK's default credential chain; in a container that
+# chain cannot see the host's profiles or SSO cache unless they are mounted in. The
+# image runs as root, so /root/.aws is where the SDK looks.
+services:
+  backend:
+    volumes:
+      - ${HOME}/.aws:/root/.aws:ro

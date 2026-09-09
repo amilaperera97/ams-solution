@@ -3,16 +3,27 @@
 # start.sh - Spin up the Certificate Discovery Platform (Spring Boot backend +
 #            Vite/React frontend) in one command.
 #
+# Two modes, selected with --mode:
+#   native (default)  no Docker at all - Gradle runs the backend, Vite the frontend
+#   docker            the backend runs as a container from backend/docker-compose.yml
+# The frontend always runs on the host through npm; there is no frontend image.
+#
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend/frontend"
 LOG_DIR="$ROOT_DIR/logs"
+BACKEND_COMPOSE="$BACKEND_DIR/docker-compose.yml"
+BACKEND_COMPOSE_AWS="$BACKEND_DIR/docker-compose.aws.yml"
+# Matches container_name / the volume name in backend/docker-compose.yml.
+BACKEND_CONTAINER="certplatform-backend"
+BACKEND_VOLUME="certplatform-data"
 
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 PROFILE="${SPRING_PROFILES_ACTIVE:-dev}"
+MODE="${START_MODE:-native}"              # native (no Docker) or docker
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-180}"   # seconds to wait for backend health
 
 RUN_BACKEND=true
@@ -24,6 +35,9 @@ KILL_PORTS=true
 BACKEND_PID=""
 FRONTEND_PID=""
 TAIL_PID=""
+DOCKER_LOGS_PID=""
+COMPOSE=()                # docker compose invocation, filled in by resolve_compose
+CONTAINER_STARTED=false
 SHUTTING_DOWN=false
 
 # ----------------------------------------------------------------- output ---
@@ -48,18 +62,33 @@ Usage:
   ./start.sh --profile qa         run the qa profile (real cloud credentials, own database)
   ./start.sh --clear-db           wipe this profile's database first, then start
   ./start.sh --profile qa --clear-db
+  ./start.sh --mode docker        run the backend as a container instead of via Gradle
   ./start.sh --backend-only
   ./start.sh --frontend-only
   ./start.sh --skip-install       don't run npm install even if node_modules is stale
   ./start.sh --no-kill-ports      fail instead of killing whatever holds the ports
   ./start.sh --help
 
+Modes:
+  native (default)  Docker is never touched: ./gradlew bootRun serves the backend and
+                    npm run dev the frontend. Needs a JDK 21 and Node.js >= 18, nothing
+                    else - the database is a plain SQLite file in backend/.
+  docker            The backend is built and run as a container through
+                    backend/docker-compose.yml, with its database on the
+                    certplatform-data volume. The frontend still runs on the host with
+                    npm, so Node.js is required in both modes.
+  Aliases: --docker = --mode docker;  --no-docker / --native / --local = --mode native.
+
 Ports 8080 (backend) and 5173 (frontend) are freed automatically: anything still
 listening on them - usually a bootRun or vite left over from a previous run - is
 sent SIGTERM, then SIGKILL if it ignores that. Use --no-kill-ports to opt out.
+In docker mode a backend container left over from an earlier run is taken down first
+whatever --no-kill-ports says, because it holds both the port and the container name.
 
 Data is kept between runs by default; --clear-db (alias --fresh) is the only thing
-that deletes it, and it only ever touches the database of the selected profile.
+that deletes it. In native mode it only ever touches the database of the selected
+profile; in docker mode it removes the certplatform-data volume, which holds the
+database of every profile that has run in a container.
 
 Profiles:
   dev  every cloud provider simulated, database backend/certplatform-dev.db
@@ -67,7 +96,7 @@ Profiles:
 
 Env overrides:
   BACKEND_PORT (8080)  FRONTEND_PORT (5173)  SPRING_PROFILES_ACTIVE (dev)
-  HEALTH_TIMEOUT (180)
+  HEALTH_TIMEOUT (180)  START_MODE (native)
   CERTPLATFORM_SECRET_KEY   required by qa; encrypts stored cloud credentials
   AWS_PROFILE               identity the qa profile assumes IAM roles with
   AWS_ENDPOINT_OVERRIDE     point qa at LocalStack instead of real AWS
@@ -90,6 +119,11 @@ while [[ $# -gt 0 ]]; do
     --profile)       [[ $# -ge 2 ]] || die "--profile needs a value (dev or qa)"
                      PROFILE="$2"; shift ;;
     --profile=*)     PROFILE="${1#*=}" ;;
+    --mode)          [[ $# -ge 2 ]] || die "--mode needs a value (native or docker)"
+                     MODE="$2"; shift ;;
+    --mode=*)        MODE="${1#*=}" ;;
+    --docker)        MODE=docker ;;
+    --no-docker|--native|--local) MODE=native ;;
     -h|--help)       usage; exit 0 ;;
     *)               die "Unknown option: $1 (try --help)" ;;
   esac
@@ -98,6 +132,13 @@ done
 
 [[ -n "$PROFILE" ]] || die "--profile needs a value (dev or qa)"
 export SPRING_PROFILES_ACTIVE="$PROFILE"
+
+case "$MODE" in
+  native|docker) ;;
+  *) die "Unknown mode: $MODE (expected native or docker)" ;;
+esac
+# docker-compose.yml interpolates both of these, so they have to be in the environment.
+export SPRING_PROFILES_ACTIVE BACKEND_PORT
 
 # Each profile keeps its own SQLite file, named to match application-<profile>.yml.
 DB_FILE="$BACKEND_DIR/certplatform-${PROFILE}.db"
@@ -122,6 +163,90 @@ clear_database() {
   fi
 }
 
+# Gradle's toolchain pins Java 21. It can still find a JDK 21 elsewhere on the box
+# even when a different one is first on PATH, so this warns instead of failing.
+check_java_version() {
+  local v
+  v="$(java -version 2>&1 | grep -oE '"[0-9]+' | head -n1 | tr -d '"' || true)"
+  [[ "$v" =~ ^[0-9]+$ ]] || return 0
+  (( v >= 21 )) && return 0
+  warn "java on PATH reports version $v, but the backend builds against Java 21.
+       Point JAVA_HOME at a JDK 21 if Gradle cannot find one itself."
+}
+
+# ---------------------------------------------------------------- docker ---
+# Only ever called in docker mode; native mode must not require the binary at all.
+resolve_compose() {
+  command -v docker >/dev/null 2>&1 || die "docker not found on PATH.
+       Install Docker, or run the whole stack without it:  ./start.sh --mode native"
+  # Tell "daemon is down" apart from "this user may not talk to it": the fixes differ,
+  # and on a fresh Linux install the second one is what people actually hit.
+  local docker_err
+  if ! docker_err="$(docker info 2>&1 >/dev/null)"; then
+    if [[ "$docker_err" == *"permission denied"* ]]; then
+      die "Docker is installed but this user cannot reach its socket:
+         ${docker_err%%$'\n'*}
+       Add yourself to the docker group, then start a new login shell:
+         sudo usermod -aG docker \"$USER\"
+       Or leave Docker out of it and run the stack natively:
+         ./start.sh --mode native"
+    fi
+    die "The Docker daemon is not reachable - start Docker Desktop, or run
+       'sudo systemctl start docker'. You can also skip Docker entirely:
+         ./start.sh --mode native"
+  fi
+  [[ -f "$BACKEND_COMPOSE" ]] || die "Missing $BACKEND_COMPOSE"
+
+  local files=(-f "$BACKEND_COMPOSE")
+  # qa resolves AWS credentials through the SDK's default chain, and inside a container
+  # that chain cannot see the host's ~/.aws unless we mount it in.
+  if [[ "$PROFILE" == "qa" && -d "$HOME/.aws" ]]; then
+    [[ -f "$BACKEND_COMPOSE_AWS" ]] \
+      || die "Missing $BACKEND_COMPOSE_AWS, which mounts ~/.aws into the qa container"
+    files+=(-f "$BACKEND_COMPOSE_AWS")
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    COMPOSE=(docker compose "${files[@]}")
+  elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE=(docker-compose "${files[@]}")
+  else
+    die "Neither 'docker compose' nor 'docker-compose' is installed.
+       Add the Compose plugin, or run without Docker:  ./start.sh --mode native"
+  fi
+}
+
+container_state() {
+  docker inspect -f '{{.State.Status}}' "$BACKEND_CONTAINER" 2>/dev/null || printf 'missing'
+}
+
+# True while the backend is up, whichever mode started it.
+backend_alive() {
+  if [[ "$MODE" == "docker" ]]; then
+    [[ "$(container_state)" == "running" ]]
+  else
+    [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" 2>/dev/null
+  fi
+}
+
+# Docker keeps every profile's database inside one volume, and removing the volume is
+# the only granularity Docker offers without a throwaway helper container.
+clear_docker_database() {
+  if ! docker volume inspect "$BACKEND_VOLUME" >/dev/null 2>&1; then
+    info "No $BACKEND_VOLUME volume yet - nothing to clear."
+    return 0
+  fi
+  warn "Removing volume $BACKEND_VOLUME: this deletes every profile's containerised
+       database, not just $PROFILE's. Native-mode files in backend/ are untouched."
+  if docker volume rm "$BACKEND_VOLUME" >/dev/null 2>&1; then
+    ok "Cleared the container database volume; Flyway will recreate the schema on startup."
+  else
+    die "Could not remove volume $BACKEND_VOLUME - something is still attached to it.
+       Find it with:  docker ps -a --filter volume=$BACKEND_VOLUME"
+  fi
+}
+
+# ------------------------------------------------------------- utilities ---
 port_in_use() {
   # Returns 0 if something is already listening on $1.
   local port="$1"
@@ -162,8 +287,11 @@ kill_port() {
     # Something answers on the port but we cannot see the owner: another user's
     # process, or a container publishing it. Killing is not an option there.
     die "Port $port ($what) is in use by a process we cannot identify (another user,
-       or a container publishing the port). Stop it, or re-run with a different port:
-       ${what^^}_PORT=<port> ./start.sh"
+       or a container publishing the port). A backend container left over from
+       './start.sh --mode docker' is the usual culprit:
+         docker compose -f backend/docker-compose.yml down
+       Otherwise stop it by hand, or re-run with a different port:
+         ${what^^}_PORT=<port> ./start.sh"
   fi
 
   warn "Port $port ($what) is in use by pid(s) $(tr '\n' ' ' <<<"$pids" | sed 's/ $//'); terminating."
@@ -235,8 +363,15 @@ cleanup() {
   SHUTTING_DOWN=true
   echo
   if [[ -n "$TAIL_PID" ]]; then kill "$TAIL_PID" 2>/dev/null || true; fi
+  if [[ -n "$DOCKER_LOGS_PID" ]]; then kill "$DOCKER_LOGS_PID" 2>/dev/null || true; fi
   stop_pid "$FRONTEND_PID" "frontend"
-  stop_pid "$BACKEND_PID"  "backend"
+  if $CONTAINER_STARTED; then
+    info "Stopping the backend container..."
+    "${COMPOSE[@]}" down >/dev/null 2>&1 \
+      || warn "docker compose down failed; check 'docker ps' for $BACKEND_CONTAINER"
+  else
+    stop_pid "$BACKEND_PID" "backend"
+  fi
   ok "All services stopped."
 }
 trap cleanup EXIT INT TERM
@@ -245,10 +380,22 @@ trap cleanup EXIT INT TERM
 mkdir -p "$LOG_DIR"
 
 if $RUN_BACKEND; then
-  [[ -x "$BACKEND_DIR/gradlew" ]] || die "Missing $BACKEND_DIR/gradlew"
-  command -v java >/dev/null 2>&1 || die "java not found on PATH (JDK 21 required)"
   [[ -f "$BACKEND_DIR/src/main/resources/application-${PROFILE}.yml" ]] \
     || die "No application-${PROFILE}.yml in $BACKEND_DIR/src/main/resources (known profiles: dev, qa)"
+
+  if [[ "$MODE" == "docker" ]]; then
+    resolve_compose
+    # A container from an earlier run would hold the port and clash on the container
+    # name, and it has to be gone before the database volume can be removed.
+    "${COMPOSE[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  else
+    [[ -x "$BACKEND_DIR/gradlew" ]] || die "Missing $BACKEND_DIR/gradlew"
+    command -v java >/dev/null 2>&1 || die "java not found on PATH (JDK 21 required).
+       Install a JDK 21 (e.g. 'sudo apt install openjdk-21-jdk'), or run the backend
+       in a container instead:  ./start.sh --mode docker"
+    check_java_version
+  fi
+
   require_free_port "$BACKEND_PORT" "backend"
 
   # qa holds real cloud credentials, and the app refuses to start without a key to
@@ -271,14 +418,20 @@ if $RUN_BACKEND; then
   fi
 
   if $CLEAR_DB; then
-    info "Clearing the $PROFILE database at $DB_FILE"
-    clear_database
+    if [[ "$MODE" == "docker" ]]; then
+      info "Clearing the containerised database (volume $BACKEND_VOLUME)"
+      clear_docker_database
+    else
+      info "Clearing the $PROFILE database at $DB_FILE"
+      clear_database
+    fi
   fi
 fi
 
 if $RUN_FRONTEND; then
   [[ -f "$FRONTEND_DIR/package.json" ]] || die "Missing $FRONTEND_DIR/package.json"
-  command -v npm >/dev/null 2>&1 || die "npm not found on PATH (Node.js >= 18 required)"
+  command -v npm >/dev/null 2>&1 || die "npm not found on PATH (Node.js >= 18 required;
+       the frontend runs on the host in both modes)"
   require_free_port "$FRONTEND_PORT" "frontend"
 
   if ! $SKIP_INSTALL; then
@@ -295,17 +448,33 @@ fi
 # ----------------------------------------------------------------- backend ---
 if $RUN_BACKEND; then
   BACKEND_LOG="$LOG_DIR/backend.log"
-  info "Starting backend on http://localhost:$BACKEND_PORT (profile: $PROFILE)"
+  info "Starting backend on http://localhost:$BACKEND_PORT (profile: $PROFILE, mode: $MODE)"
   info "  log: $BACKEND_LOG"
-  info "  database: $DB_FILE$($CLEAR_DB && echo " (cleared)" || echo " (existing data kept)")"
-  BACKEND_PID="$(start_bg "$BACKEND_DIR" "$BACKEND_LOG" \
-    ./gradlew bootRun --console=plain "--args=--server.port=$BACKEND_PORT")"
+
+  if [[ "$MODE" == "docker" ]]; then
+    info "  database: volume $BACKEND_VOLUME$($CLEAR_DB && echo " (cleared)" || echo " (existing data kept)")"
+    info "  building the image if it is missing or stale - the first build pulls the JDK"
+    info "  image and downloads Gradle dependencies, so give it a few minutes"
+    : >"$BACKEND_LOG"
+    "${COMPOSE[@]}" up -d --build \
+      || die "docker compose could not start the backend. Fix the error above, or run
+       the backend straight from Gradle instead:  ./start.sh --mode native"
+    CONTAINER_STARTED=true
+    # Mirror container output into the file native mode writes to, so the tail at the
+    # end of this script shows both services the same way in either mode.
+    ( "${COMPOSE[@]}" logs -f --no-color --tail 200 ) >>"$BACKEND_LOG" 2>&1 &
+    DOCKER_LOGS_PID=$!
+  else
+    info "  database: $DB_FILE$($CLEAR_DB && echo " (cleared)" || echo " (existing data kept)")"
+    BACKEND_PID="$(start_bg "$BACKEND_DIR" "$BACKEND_LOG" \
+      ./gradlew bootRun --console=plain "--args=--server.port=$BACKEND_PORT")"
+  fi
 
   info "Waiting for backend to become healthy (up to ${HEALTH_TIMEOUT}s)..."
   deadline=$(( SECONDS + HEALTH_TIMEOUT ))
   until port_in_use "$BACKEND_PORT"; do
-    if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
-      warn "Backend process exited. Last 40 log lines:"
+    if ! backend_alive; then
+      warn "Backend stopped before it came up. Last 40 log lines:"
       tail -n 40 "$BACKEND_LOG" >&2 || true
       die "Backend failed to start."
     fi
@@ -345,7 +514,7 @@ fi
 echo
 ok "Stack is running. Press Ctrl+C to stop everything."
 printf '%s' "$C_DIM"
-if $RUN_BACKEND;  then echo "  backend  http://localhost:$BACKEND_PORT"; fi
+if $RUN_BACKEND;  then echo "  backend  http://localhost:$BACKEND_PORT ($MODE)"; fi
 if $RUN_FRONTEND; then echo "  frontend http://localhost:$FRONTEND_PORT"; fi
 printf '%s\n' "$C_RESET"
 
@@ -357,7 +526,7 @@ TAIL_PID=$!
 
 # Exit as soon as either service dies, so we never leave a half-running stack.
 while ! $SHUTTING_DOWN; do
-  if [[ -n "$BACKEND_PID" ]] && ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+  if $RUN_BACKEND && ! backend_alive; then
     warn "Backend exited."; break
   fi
   if [[ -n "$FRONTEND_PID" ]] && ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
