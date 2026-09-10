@@ -41,7 +41,7 @@ await page.route('**/api/v1/organisations/org-001/providers', async route => {
   });
 
   await page.route('**/api/v1/accounts/*/test-connection', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, message: 'Connection successful' }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'CONNECTED', message: 'Authenticated as arn:aws:sts::123456789012:assumed-role/CertRole/certplatform in eu-west-2' }) });
   });
 
   // Login is just navigation for now as auth is not fully mocked
@@ -56,16 +56,18 @@ await page.route('**/api/v1/organisations/org-001/providers', async route => {
   
   await page.getByLabel('IAM Role').check();
   await page.getByLabel('Role ARN').fill('arn:aws:iam::123456789012:role/CertRole');
-  
-  await page.getByRole('button', { name: 'Test Connection' }).click();
-  await expect(page.getByText(/Connection successful/i)).toBeVisible();
-  
+
   await page.getByRole('button', { name: 'Save Account' }).click();
   await expect(page.getByRole('row', { name: /E2E Prod Account/i })).toBeVisible();
 
-  // Edit Account
+  // Edit Account - and only now can the connection be tested, since the test reads
+  // the credentials back from the stored account.
   const accRow = page.getByRole('row', { name: /E2E Prod Account/i });
   await accRow.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Test Connection' }).click();
+  await expect(page.getByText(/Connection successful/i)).toBeVisible();
+
   await page.getByLabel('Token', { exact: true }).check();
   await page.getByLabel('Token Value').fill('e2e-token-secret');
   await page.getByRole('button', { name: 'Save Account' }).click();

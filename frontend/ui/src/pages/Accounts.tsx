@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchApi } from '../services/api';
+import { fetchApi, ApiError } from '../services/api';
 import type { AccountAuthType, CloudProviderConfigMap } from '../types';
 
 const AUTH_LABELS: Record<AccountAuthType, string> = {
@@ -41,6 +41,10 @@ const Accounts: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{success: boolean, message: string} | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Whatever the API rejected the save with. Client-side validation mirrors the
+  // backend rules but cannot know about them all - encryption not configured, an
+  // environment that vanished - so the reason has to be shown, not swallowed.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState(emptyForm);
 
@@ -87,6 +91,14 @@ const Accounts: React.FC = () => {
       setSelectedEnvironmentId('');
     }
   }, [environments, selectedEnvironmentId]);
+
+  // The page's list is filtered by selectedProviderId; the modal can point at a
+  // different provider, and its environment select needs that provider's own list.
+  const { data: formEnvironments } = useQuery({
+    queryKey: ['environments', formData.provider],
+    queryFn: () => fetchApi<any[]>(`/api/v1/providers/${formData.provider}/environments`),
+    enabled: !!formData.provider,
+  });
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['accounts', selectedEnvironmentId],
@@ -151,21 +163,39 @@ const Accounts: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setSaveError(null);
       setIsModalOpen(false);
       setAccountToEdit(null);
       resetForm();
+    },
+    onError: (error: unknown) => {
+      setSaveError(error instanceof ApiError || error instanceof Error
+        ? error.message
+        : 'Unable to save the account.');
     }
   });
 
+  // The endpoint tests a *stored* account: it takes the internal account id and
+  // reads the credentials back out of the database. There is nothing to test until
+  // the account has been saved, which is why the button is disabled before then.
   const testConnectionMutation = useMutation({
-    mutationFn: () => fetchApi(`/api/v1/accounts/${accountToEdit?.id || formData.accountId || 'test'}/test-connection`, {
+    mutationFn: () => fetchApi<any>(`/api/v1/accounts/${accountToEdit?.id}/test-connection`, {
       method: 'POST'
     }),
     onSuccess: (data: any) => {
-      setConnectionStatus({ success: true, message: data?.message || 'Connection successful' });
+      // A credential AWS rejects is a 200 carrying status FAILED, so the HTTP
+      // result says nothing about whether the connection worked.
+      const connected = data?.status === 'CONNECTED';
+      setConnectionStatus({
+        success: connected,
+        message: data?.message || (connected ? 'Connection successful' : 'Connection failed'),
+      });
     },
-    onError: () => {
-      setConnectionStatus({ success: false, message: 'Connection failed' });
+    onError: (error: unknown) => {
+      setConnectionStatus({
+        success: false,
+        message: error instanceof Error ? error.message : 'Connection failed',
+      });
     }
   });
 
@@ -193,6 +223,7 @@ const Accounts: React.FC = () => {
     });
     setConnectionStatus(null);
     setErrors({});
+    setSaveError(null);
   };
 
   const validateForm = () => {
@@ -277,6 +308,7 @@ const Accounts: React.FC = () => {
     });
     setConnectionStatus(null);
     setErrors({});
+    setSaveError(null);
     setIsModalOpen(true);
   };
 
@@ -423,8 +455,7 @@ const Accounts: React.FC = () => {
                       disabled={!!accountToEdit || !formData.provider}
                     >
                       <option value="" disabled>Select Environment</option>
-                      {/* Only showing environments for the currently selected provider in the main view for simplicity in this demo */}
-                      {formData.provider === selectedProviderId && environments?.map(e => (
+                      {formEnvironments?.map(e => (
                         <option key={e.id} value={e.id}>{e.name}</option>
                       ))}
                     </select>
@@ -611,8 +642,20 @@ const Accounts: React.FC = () => {
                 )}
 
                 {connectionStatus && (
-                  <div className={`p-3 rounded-md text-sm ${connectionStatus.success ? 'bg-green-500/20 text-green-400 border border-green-500/50' : 'bg-red-500/20 text-red-400 border border-red-500/50'}`}>
-                    {connectionStatus.success ? '✓ Connection successful' : '✕ Connection failed'}
+                  <div role="alert" className={`p-3 rounded-md text-sm ${connectionStatus.success ? 'bg-green-500/20 text-green-400 border border-green-500/50' : 'bg-red-500/20 text-red-400 border border-red-500/50'}`}>
+                    <p className="font-medium">
+                      {connectionStatus.success ? '✓ Connection successful' : '✕ Connection failed'}
+                    </p>
+                    {/* STS says which identity answered, or why it refused - the only
+                        detail that makes a failed test actionable. */}
+                    <p className="mt-1 text-xs break-words opacity-90">{connectionStatus.message}</p>
+                  </div>
+                )}
+
+                {saveError && (
+                  <div role="alert" className="p-3 rounded-md text-sm bg-red-500/20 text-red-400 border border-red-500/50">
+                    <p className="font-medium">✕ Account not saved</p>
+                    <p className="mt-1 text-xs break-words opacity-90">{saveError}</p>
                   </div>
                 )}
 
@@ -627,8 +670,9 @@ const Accounts: React.FC = () => {
                   <button 
                     type="button"
                     onClick={() => testConnectionMutation.mutate()}
-                    disabled={testConnectionMutation.isPending}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50"
+                    disabled={testConnectionMutation.isPending || !accountToEdit}
+                    title={!accountToEdit ? 'Save the account first - the test reads the stored credentials.' : undefined}
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {testConnectionMutation.isPending ? 'Testing...' : 'Test Connection'}
                   </button>
@@ -640,6 +684,12 @@ const Accounts: React.FC = () => {
                     {saveAccMutation.isPending ? 'Saving...' : 'Save Account'}
                   </button>
                 </div>
+                {!accountToEdit && (
+                  <p className="mt-2 text-xs text-gray-400">
+                    Save the account first, then reopen it with Edit to test the connection - the test
+                    reads the credentials back from the stored account.
+                  </p>
+                )}
               </form>
             </div>
           </div>

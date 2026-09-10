@@ -46,7 +46,8 @@ async function mockBackend(page: Page, options: { accounts?: any[]; mode?: Mode 
   });
 
   await page.route('**/api/v1/accounts/*/test-connection', route =>
-    route.fulfill(json({ status: 'CONNECTED', message: 'Connection successful' })));
+    route.fulfill(json({ status: 'CONNECTED', provider: 'AWS', accountId: '123456789012',
+      message: 'Authenticated as arn:aws:sts::123456789012:assumed-role/CertRole/certplatform in eu-west-2' })));
 
   await page.route('**/api/v1/accounts/*', async route => {
     if (route.request().method() !== 'PUT') return route.fallback();
@@ -205,7 +206,7 @@ test.describe('Account Enhancements', () => {
     await expect(page.getByLabel('Role ARN')).not.toBeVisible();
   });
 
-  test('TC-ACCOUNT-010: User can test Token connection', async ({ page }) => {
+  test('TC-ACCOUNT-010: Test Connection is unavailable until the account is saved', async ({ page }) => {
     await mockBackend(page);
     await openAddForm(page);
 
@@ -213,20 +214,85 @@ test.describe('Account Enhancements', () => {
     await page.getByRole('radio', { name: 'Token' }).check();
     await page.getByLabel('Token Value').fill('test-token');
 
+    // The endpoint resolves the account by its internal id and reads the stored
+    // credentials, so there is nothing to test before the first save.
+    await expect(page.getByRole('button', { name: 'Test Connection' })).toBeDisabled();
+    await expect(page.getByText(/Save the account first/i)).toBeVisible();
+  });
+
+  test('TC-ACCOUNT-011: User can test the connection of a stored account', async ({ page }) => {
+    await mockBackend(page, {
+      accounts: [{
+        id: 'acc-test-conn', name: 'Testable Account', providerId: 'aws-1', provider: 'AWS',
+        environmentId: 'env-1', accountId: '123456789012', authType: 'IAM_ROLE',
+        region: 'eu-west-2', roleArnConfigured: true, credentialsConfigured: true, status: 'ACTIVE',
+      }],
+    });
+
+    await page.goto('/accounts');
+    await page.getByRole('row', { name: /Testable Account/i })
+      .getByRole('button', { name: 'Edit', exact: true }).click();
+
     await page.getByRole('button', { name: 'Test Connection' }).click();
     await expect(page.getByText(/Connection successful/i)).toBeVisible();
   });
 
-  test('TC-ACCOUNT-011: User can test IAM Role connection', async ({ page }) => {
-    await mockBackend(page);
-    await openAddForm(page);
+  test('TC-ACCOUNT-011b: A rejected credential is reported as a failure, with the reason', async ({ page }) => {
+    await mockBackend(page, {
+      accounts: [{
+        id: 'acc-bad-conn', name: 'Rejected Account', providerId: 'aws-1', provider: 'AWS',
+        environmentId: 'env-1', accountId: '123456789012', authType: 'ACCESS_KEY',
+        region: 'eu-west-2', accessKeyId: '****MPLE', credentialsConfigured: true, status: 'ACTIVE',
+      }],
+    });
 
-    await page.getByLabel('Account ID').fill('123456789012');
-    await page.getByRole('radio', { name: 'IAM Role' }).check();
-    await page.getByLabel('Role ARN').fill('arn:aws:iam::123456789012:role/Role');
+    // AWS refusing the credentials is a 200 carrying status FAILED, not an HTTP error.
+    await page.route('**/api/v1/accounts/acc-bad-conn/test-connection', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'FAILED', provider: 'AWS', accountId: '123456789012',
+        message: 'AWS rejected the credentials: The security token included in the request is invalid.',
+      }),
+    }));
+
+    await page.goto('/accounts');
+    await page.getByRole('row', { name: /Rejected Account/i })
+      .getByRole('button', { name: 'Edit', exact: true }).click();
 
     await page.getByRole('button', { name: 'Test Connection' }).click();
-    await expect(page.getByText(/Connection successful/i)).toBeVisible();
+
+    await expect(page.getByText(/Connection failed/i)).toBeVisible();
+    await expect(page.getByText(/security token included in the request is invalid/i)).toBeVisible();
+  });
+
+  test('TC-ACCOUNT-010b: A rejected save shows the reason the API gave', async ({ page }) => {
+    await mockBackend(page, { mode: 'REAL' });
+    // Whatever the client-side rules let through, the backend has the last word -
+    // and its message is the only thing that says which rule was broken.
+    await page.route('**/api/v1/environments/env-1/accounts', route =>
+      route.request().method() === 'POST'
+        ? route.fulfill({
+            status: 400,
+            contentType: 'text/plain',
+            body: 'Refusing to store credentials for a REAL provider without encryption. '
+                + 'Set CERTPLATFORM_SECRET_KEY and restart.',
+          })
+        : route.fallback());
+
+    await openAddForm(page);
+    await page.getByLabel('Account Name').fill('Doomed Account');
+    await page.getByLabel('Account ID').fill('123456789012');
+    await page.getByRole('radio', { name: 'Access Key' }).check();
+    await page.getByLabel('Access Key ID').fill('AKIAIOSFODNN7EXAMPLE');
+    await page.getByLabel('Secret Access Key').fill('wJalrXUtnFEMI/K7MDENG');
+    await page.getByLabel('AWS Region').fill('eu-west-2');
+
+    await page.getByRole('button', { name: 'Save Account' }).click();
+
+    await expect(page.getByText(/Account not saved/i)).toBeVisible();
+    await expect(page.getByText(/CERTPLATFORM_SECRET_KEY/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Add Account' })).toBeVisible();
   });
 
   test('TC-ACCOUNT-012: User can edit authentication type', async ({ page }) => {
