@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '../services/api';
+import { useDiscoveryCapabilities } from '../hooks/useApi';
+import type { DiscoveryCapability } from '../types';
 
 interface NewScanModalProps {
   onClose: () => void;
@@ -27,6 +29,23 @@ const NewScanModal: React.FC<NewScanModalProps> = ({ onClose, onSave, isSaving, 
     queryKey: ['organization'],
     queryFn: () => fetchApi<any>('/api/v1/organisations/current')
   });
+
+  // The scannable services come from the backend catalogue rather than a
+  // hardcoded list, so a newly onboarded service appears here with no UI change.
+  const { data: capabilities, isLoading: capabilitiesLoading } = useDiscoveryCapabilities();
+
+  const capabilitiesByPhase = React.useMemo(() => {
+    const grouped = new Map<number, DiscoveryCapability[]>();
+    (capabilities ?? []).forEach(capability => {
+      const bucket = grouped.get(capability.phase) ?? [];
+      bucket.push(capability);
+      grouped.set(capability.phase, bucket);
+    });
+    return Array.from(grouped.entries()).sort(([a], [b]) => a - b);
+  }, [capabilities]);
+
+  const labelForService = (key: string) =>
+    (capabilities ?? []).find(capability => capability.key === key)?.label ?? key;
 
   const { data: allProviders } = useQuery({
     queryKey: ['providers', org?.id],
@@ -84,6 +103,17 @@ const NewScanModal: React.FC<NewScanModalProps> = ({ onClose, onSave, isSaving, 
       }
     }
   }, [allAccounts, scopeType]);
+
+  // A saved scan being re-run may name a service that has since been disabled or
+  // renamed; silently sending it would fail the new scan on an unknown service.
+  useEffect(() => {
+    if (!capabilities) return;
+    const selectable = new Set(capabilities.filter(c => c.selectable).map(c => c.key));
+    setServices(current => {
+      const kept = current.filter(key => selectable.has(key));
+      return kept.length === current.length ? current : kept;
+    });
+  }, [capabilities]);
 
   console.log("Render State:", { scopeType, selectedProviders, selectedEnvironments, selectedAccounts });
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -308,12 +338,53 @@ const NewScanModal: React.FC<NewScanModalProps> = ({ onClose, onSave, isSaving, 
                   </div>
                   <div>
                     <span className="block text-xs font-semibold text-gray-500 mb-2">Services</span>
-                    {['ACM', 'ALB', 'API Gateway', 'CloudFront'].map(svc => (
-                      <label key={svc} className="flex items-center space-x-2 mb-1">
-                        <input type="checkbox" checked={services.includes(svc)} onChange={e => handleCheckboxChange(setServices, services, svc, e.target.checked)} className="bg-gray-900 border-gray-700 rounded" />
-                        <span className="text-sm text-gray-300">{svc}</span>
-                      </label>
-                    ))}
+                    {capabilitiesLoading && (
+                      <span className="text-sm text-gray-500">Loading available services...</span>
+                    )}
+                    {!capabilitiesLoading && capabilitiesByPhase.length === 0 && (
+                      <span className="text-sm text-gray-500">No discovery services are registered.</span>
+                    )}
+                    <div className="max-h-56 overflow-y-auto pr-1 space-y-3">
+                      {capabilitiesByPhase.map(([phase, group]) => (
+                        <div key={phase}>
+                          <span className="block text-[10px] uppercase tracking-wide text-gray-600 mb-1">
+                            Phase {phase}
+                          </span>
+                          {group.map(capability => (
+                            <label
+                              key={`${capability.provider}:${capability.key}`}
+                              title={capability.selectable
+                                ? capability.requiredPermissions.join(', ')
+                                : capability.disabled
+                                  ? 'Switched off by configuration'
+                                  : 'Not implemented yet'}
+                              className={`flex items-center space-x-2 mb-1 ${
+                                capability.selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={!capability.selectable}
+                                checked={services.includes(capability.key)}
+                                onChange={e => handleCheckboxChange(setServices, services, capability.key, e.target.checked)}
+                                className="bg-gray-900 border-gray-700 rounded disabled:opacity-40"
+                              />
+                              <span className="text-sm text-gray-300">{capability.label}</span>
+                              {capability.scope === 'GLOBAL' && (
+                                <span
+                                  title="Global service - scanned once per account, not once per region"
+                                  className="text-[10px] text-gray-500 border border-gray-700 rounded px-1"
+                                >
+                                  global
+                                </span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    <span className="block text-xs text-gray-600 mt-2">
+                      Leave empty to scan every available service.
+                    </span>
                   </div>
                 </div>
               </div>
@@ -381,7 +452,7 @@ const NewScanModal: React.FC<NewScanModalProps> = ({ onClose, onSave, isSaving, 
               {services.length > 0 && (
                 <div>
                   <span className="block text-xs font-semibold text-gray-500 mb-1">Services</span>
-                  <span className="text-sm text-white">{services.join(', ')}</span>
+                  <span className="text-sm text-white">{services.map(labelForService).join(', ')}</span>
                 </div>
               )}
             </div>

@@ -4,6 +4,8 @@ import uk.co.ams.certplatform.domain.enums.AccountAuthType;
 import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 import uk.co.ams.certplatform.domain.model.Account;
 import uk.co.ams.certplatform.shared.config.CloudProviderProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
@@ -11,9 +13,9 @@ import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
+import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.acm.AcmClient;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 import software.amazon.awssdk.services.sts.model.AssumeRoleResponse;
@@ -21,18 +23,35 @@ import software.amazon.awssdk.services.sts.model.Credentials;
 
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Builds AWS SDK clients from the credentials stored against an {@link Account}.
  *
- * Clients are created per call rather than cached, because each account carries
- * its own credentials and region. They are {@link AutoCloseable} - callers must
- * use try-with-resources.
+ * <p>There is deliberately no per-service factory method. Onboarding a service
+ * means calling {@code client(FooClient::builder, account, region)} from the new
+ * strategy - nothing here changes. Clients are {@link AutoCloseable}; callers
+ * must use try-with-resources.
+ *
+ * <p>Assumed-role credentials are cached per account and reused until shortly
+ * before they expire. Without that, a fifteen-service scan across five regions
+ * would perform seventy-five AssumeRole calls for a single account and would be
+ * throttled by STS long before AWS ran out of certificates to report.
  */
 @Component
 public class AwsClientFactory {
 
+    private static final Logger log = LoggerFactory.getLogger(AwsClientFactory.class);
+
+    /** Renew this far ahead of expiry so an in-flight call cannot outlive its credentials. */
+    private static final Duration EXPIRY_MARGIN = Duration.ofMinutes(5);
+    private static final int ASSUME_ROLE_DURATION_SECONDS = 3600;
+
     private final CloudProviderProperties properties;
+    private final Map<String, CachedCredentials> assumedRoleCache = new ConcurrentHashMap<>();
 
     public AwsClientFactory(CloudProviderProperties properties) {
         this.properties = properties;
@@ -53,16 +72,22 @@ public class AwsClientFactory {
         return settings().getDefaultRegion();
     }
 
-    public StsClient stsClient(Account account, String region) {
-        return configure(StsClient.builder(), region)
-                .credentialsProvider(credentialsFor(account, region))
+    /**
+     * The one entry point for every AWS service client.
+     *
+     * <pre>{@code
+     * try (AcmClient acm = clientFactory.client(AcmClient::builder, account, region)) { ... }
+     * }</pre>
+     */
+    public <B extends AwsClientBuilder<B, C>, C> C client(Supplier<B> builderSupplier, Account account, String region) {
+        String effectiveRegion = resolveRegion(account, region);
+        return configure(builderSupplier.get(), effectiveRegion)
+                .credentialsProvider(credentialsFor(account, effectiveRegion))
                 .build();
     }
 
-    public AcmClient acmClient(Account account, String region) {
-        return configure(AcmClient.builder(), region)
-                .credentialsProvider(credentialsFor(account, region))
-                .build();
+    public StsClient stsClient(Account account, String region) {
+        return client(StsClient::builder, account, region);
     }
 
     private <B extends AwsClientBuilder<B, ?>> B configure(B builder, String region) {
@@ -70,6 +95,10 @@ public class AwsClientFactory {
         builder.region(Region.of(region))
                .overrideConfiguration(ClientOverrideConfiguration.builder()
                        .apiCallTimeout(Duration.ofSeconds(settings.getApiTimeoutSeconds()))
+                       // Adaptive retry backs off on throttling rather than hammering a
+                       // rate-limited account, which matters once a scan fans out over
+                       // fifteen services and several regions at once.
+                       .retryStrategy(AwsRetryStrategy.adaptiveRetryStrategy())
                        .build());
         // Present for LocalStack or a recorded stub; absent when talking to real AWS.
         if (settings.getEndpoint() != null && !settings.getEndpoint().isBlank()) {
@@ -91,21 +120,41 @@ public class AwsClientFactory {
         return switch (authType) {
             case ACCESS_KEY -> StaticCredentialsProvider.create(
                     AwsBasicCredentials.create(requireAccessKeyId(account), requireSecretAccessKey(account)));
-            case IAM_ROLE -> assumeRole(account, region);
+            case IAM_ROLE -> cachedAssumeRole(account, region);
             case TOKEN -> throw new IllegalStateException(
                     "TOKEN auth cannot be used against real AWS. Reconfigure account " + account.getId()
                     + " with ACCESS_KEY or IAM_ROLE.");
         };
     }
 
-    private AwsCredentialsProvider assumeRole(Account account, String region) {
+    private AwsCredentialsProvider cachedAssumeRole(Account account, String region) {
+        String cacheKey = account.getId() + "|" + account.getRoleArn();
+        CachedCredentials cached = assumedRoleCache.get(cacheKey);
+        if (cached != null && cached.isUsable()) {
+            return cached.provider();
+        }
+        synchronized (assumedRoleCache) {
+            cached = assumedRoleCache.get(cacheKey);
+            if (cached != null && cached.isUsable()) {
+                return cached.provider();
+            }
+            CachedCredentials fresh = assumeRole(account, region);
+            assumedRoleCache.put(cacheKey, fresh);
+            return fresh.provider();
+        }
+    }
+
+    private CachedCredentials assumeRole(Account account, String region) {
         try (StsClient base = configure(StsClient.builder(), region)
                 .credentialsProvider(baseCredentialsFor(account))
                 .build()) {
             AssumeRoleResponse response = base.assumeRole(assumeRoleRequestFor(account));
             Credentials issued = response.credentials();
-            return StaticCredentialsProvider.create(AwsSessionCredentials.create(
-                    issued.accessKeyId(), issued.secretAccessKey(), issued.sessionToken()));
+            log.debug("Assumed {} for account {}, expires {}", account.getRoleArn(), account.getId(), issued.expiration());
+            return new CachedCredentials(
+                    StaticCredentialsProvider.create(AwsSessionCredentials.create(
+                            issued.accessKeyId(), issued.secretAccessKey(), issued.sessionToken())),
+                    issued.expiration());
         }
     }
 
@@ -143,12 +192,23 @@ public class AwsClientFactory {
         AssumeRoleRequest.Builder request = AssumeRoleRequest.builder()
                 .roleArn(account.getRoleArn())
                 .roleSessionName("certplatform-" + shortId(account.getId()))
-                .durationSeconds(3600);
+                .durationSeconds(ASSUME_ROLE_DURATION_SECONDS);
         // Required when the target role's trust policy sets a sts:ExternalId condition.
         if (account.getExternalId() != null && !account.getExternalId().isBlank()) {
             request.externalId(account.getExternalId());
         }
         return request.build();
+    }
+
+    /** Drops any cached session for an account, so a credential change takes effect at once. */
+    public void evict(String accountId) {
+        assumedRoleCache.keySet().removeIf(key -> key.startsWith(accountId + "|"));
+    }
+
+    private record CachedCredentials(AwsCredentialsProvider provider, Instant expiresAt) {
+        boolean isUsable() {
+            return expiresAt != null && Instant.now().plus(EXPIRY_MARGIN).isBefore(expiresAt);
+        }
     }
 
     private static boolean hasAccessKey(Account account) {

@@ -63,10 +63,14 @@ public class CertificateRepositoryAdapter implements CertificateRepositoryPort {
         entity.setScanId(domain.getScanId());
         entity.setProvider(domain.getProvider());
         entity.setAccountId(domain.getAccountId());
-        entity.setEnvironment(domain.getEnvironment());
         entity.setRegion(domain.getRegion());
-        entity.setDomain(domain.getDomain());
-        entity.setStatus(domain.getStatus());
+        // domain, status and environment are NOT NULL in the schema, but a certificate
+        // read off a disk may legitimately have no CN and no SAN. Substituting a marker
+        // keeps the record - and the resource it was found on - rather than failing the
+        // insert and taking every other certificate in the batch down with it.
+        entity.setDomain(orUnknown(domain.getDomain()));
+        entity.setStatus(orUnknown(domain.getStatus()));
+        entity.setEnvironment(orUnassigned(domain.getEnvironment()));
         entity.setService(domain.getService());
         entity.setResource(domain.getResource());
         entity.setIssuedDate(domain.getIssuedDate());
@@ -94,6 +98,14 @@ public class CertificateRepositoryAdapter implements CertificateRepositoryPort {
         }
 
         return entity;
+    }
+
+    private static String orUnknown(String value) {
+        return value != null && !value.isBlank() ? value : "unknown";
+    }
+
+    private static String orUnassigned(String value) {
+        return value != null && !value.isBlank() ? value : "unassigned";
     }
 
     private Certificate toDomain(CertificateEntity entity) {

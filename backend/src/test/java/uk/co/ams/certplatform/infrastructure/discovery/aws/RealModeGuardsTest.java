@@ -2,14 +2,20 @@ package uk.co.ams.certplatform.infrastructure.discovery.aws;
 
 import uk.co.ams.certplatform.domain.enums.AccountAuthType;
 import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.enums.DiscoveryStatus;
 import uk.co.ams.certplatform.domain.enums.ProviderMode;
 import uk.co.ams.certplatform.domain.model.Account;
 import uk.co.ams.certplatform.domain.model.ConnectionTestResult;
 import uk.co.ams.certplatform.domain.model.DiscoveryResult;
 import uk.co.ams.certplatform.domain.model.ScanContext;
+import uk.co.ams.certplatform.infrastructure.cloud.aws.AwsCertificateReferenceResolver;
 import uk.co.ams.certplatform.infrastructure.cloud.aws.AwsClientFactory;
 import uk.co.ams.certplatform.infrastructure.cloud.azure.AzureCloudProviderAdapter;
 import uk.co.ams.certplatform.infrastructure.cloud.gcp.GcpCloudProviderAdapter;
+import uk.co.ams.certplatform.infrastructure.compute.ComputeCertificateScanner;
+import uk.co.ams.certplatform.infrastructure.discovery.aws.phase2.AwsSecretsManagerDiscoveryStrategy;
+import uk.co.ams.certplatform.infrastructure.discovery.support.SimulatedCertificateFactory;
+import uk.co.ams.certplatform.infrastructure.discovery.support.X509CertificateParser;
 import uk.co.ams.certplatform.shared.config.CloudProviderProperties;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class RealModeGuardsTest {
 
     private static final String DEAD_ENDPOINT = "http://127.0.0.1:1";
+
+    private final SimulatedCertificateFactory simulator = new SimulatedCertificateFactory();
 
     private CloudProviderProperties realAwsProperties() {
         CloudProviderProperties.ProviderSettings aws = new CloudProviderProperties.ProviderSettings();
@@ -49,41 +57,50 @@ class RealModeGuardsTest {
         return account;
     }
 
+    private AwsAcmDiscoveryStrategy acmStrategy(CloudProviderProperties properties) {
+        AwsClientFactory clientFactory = new AwsClientFactory(properties);
+        return new AwsAcmDiscoveryStrategy(properties, simulator, clientFactory,
+                new AwsCertificateReferenceResolver(clientFactory, new X509CertificateParser()));
+    }
+
     @Test
     void acmDiscoveryShouldCallAwsRatherThanFabricateCertificates() {
-        CloudProviderProperties properties = realAwsProperties();
-        AwsAcmCertificateDiscoveryStrategy strategy =
-                new AwsAcmCertificateDiscoveryStrategy(properties, new AwsClientFactory(properties));
+        DiscoveryResult result = acmStrategy(realAwsProperties())
+                .discover(new ScanContext("s1", realAccount(), "eu-west-2", "ACM"));
 
-        DiscoveryResult result = strategy.discover(new ScanContext("s1", realAccount(), "eu-west-2", "ACM"));
-
-        assertEquals("FAILED", result.getStatus());
+        assertEquals(DiscoveryStatus.FAILED, result.getStatus());
         assertTrue(result.getCertificates().isEmpty(), "REAL mode must not invent certificates");
         assertFalse(result.getErrors().isEmpty(), "the AWS failure should be reported");
     }
 
     @Test
-    void ec2DiscoveryShouldBeSkippedRatherThanSimulatedInRealMode() {
-        AwsEc2CertificateDiscoveryStrategy strategy =
-                new AwsEc2CertificateDiscoveryStrategy(List.of(), List.of(), realAwsProperties());
+    void ec2DiscoveryShouldReportNoReachableInstancesRatherThanSimulatedOnes() {
+        CloudProviderProperties properties = realAwsProperties();
+        AwsClientFactory clientFactory = new AwsClientFactory(properties);
+        AwsEc2FilesystemDiscoveryStrategy strategy = new AwsEc2FilesystemDiscoveryStrategy(
+                properties, simulator, clientFactory,
+                new ComputeCertificateScanner(List.of(), List.of()));
 
         DiscoveryResult result = strategy.discover(new ScanContext("s1", realAccount(), "eu-west-2", "EC2"));
 
-        assertEquals("SKIPPED", result.getStatus());
+        // No compute executor is wired in this unit test, so the scanner reports the
+        // gap explicitly. What matters is that nothing was invented.
+        assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.getStatus());
         assertTrue(result.getCertificates().isEmpty());
-        assertTrue(result.getMessage().contains("not implemented for REAL mode"));
     }
 
     @Test
-    void secretsManagerDiscoveryShouldBeSkippedInRealMode() {
-        AwsSecretsManagerCertificateDiscoveryStrategy strategy =
-                new AwsSecretsManagerCertificateDiscoveryStrategy(realAwsProperties());
+    void aRegisteredButUnbuiltServiceReportsNotImplementedInEitherMode() {
+        for (CloudProviderProperties properties : List.of(realAwsProperties(), new CloudProviderProperties())) {
+            AwsSecretsManagerDiscoveryStrategy strategy = new AwsSecretsManagerDiscoveryStrategy(
+                    properties, simulator, new AwsClientFactory(properties));
 
-        DiscoveryResult result = strategy.discover(
-                new ScanContext("s1", realAccount(), "eu-west-2", "SECRETS_MANAGER"));
+            DiscoveryResult result = strategy.discover(
+                    new ScanContext("s1", realAccount(), "eu-west-2", "SECRETS_MANAGER"));
 
-        assertEquals("SKIPPED", result.getStatus());
-        assertTrue(result.getCertificates().isEmpty());
+            assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.getStatus());
+            assertTrue(result.getCertificates().isEmpty());
+        }
     }
 
     @Test
@@ -112,12 +129,35 @@ class RealModeGuardsTest {
         CloudProviderProperties properties = new CloudProviderProperties();
         assertFalse(properties.isReal(CloudProviderType.AWS));
 
-        AwsAcmCertificateDiscoveryStrategy strategy =
-                new AwsAcmCertificateDiscoveryStrategy(properties, new AwsClientFactory(properties));
-        DiscoveryResult result = strategy.discover(new ScanContext("s1", realAccount(), "eu-west-2", "ACM"));
+        DiscoveryResult result = acmStrategy(properties)
+                .discover(new ScanContext("s1", realAccount(), "eu-west-2", "ACM"));
 
-        assertEquals("SUCCESS", result.getStatus());
+        assertEquals(DiscoveryStatus.SUCCESS, result.getStatus());
         assertEquals(1, result.getCertificates().size());
         assertEquals("acm.example.com", result.getCertificates().get(0).getDomain());
+    }
+
+    @Test
+    void everyPhaseOneServiceCallsAwsInsteadOfSimulatingWhenModeIsReal() {
+        CloudProviderProperties properties = realAwsProperties();
+        AwsClientFactory clientFactory = new AwsClientFactory(properties);
+        AwsCertificateReferenceResolver resolver =
+                new AwsCertificateReferenceResolver(clientFactory, new X509CertificateParser());
+
+        List<uk.co.ams.certplatform.application.port.CertificateDiscoveryStrategy> strategies = List.of(
+                new AwsAlbDiscoveryStrategy(properties, simulator, clientFactory, resolver),
+                new AwsNlbDiscoveryStrategy(properties, simulator, clientFactory, resolver),
+                new AwsCloudFrontDiscoveryStrategy(properties, simulator, clientFactory, resolver),
+                new AwsApiGatewayDiscoveryStrategy(properties, simulator, clientFactory, resolver));
+
+        for (var strategy : strategies) {
+            DiscoveryResult result = strategy.discover(
+                    new ScanContext("s1", realAccount(), "eu-west-2", strategy.descriptor().key()));
+
+            assertTrue(result.getCertificates().isEmpty(),
+                    strategy.descriptor().key() + " invented certificates in REAL mode");
+            assertNotEquals(DiscoveryStatus.SUCCESS, result.getStatus(),
+                    strategy.descriptor().key() + " reported success without reaching AWS");
+        }
     }
 }

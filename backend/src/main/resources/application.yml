@@ -26,3 +26,25 @@ cloud:
       mode: MOCK
     gcp:
       mode: MOCK
+
+# Discovery engine. Every service in the catalogue is scanned unless listed in
+# disabled-services; the parallelism and rate limits protect the target account's
+# API budget once a scan fans out over many services and regions at once.
+certificate-discovery:
+  parallelism:
+    max-concurrent-tasks: 20
+    max-concurrent-tasks-per-account: 8
+    task-starts-per-second-per-account: 10
+    scan-timeout-minutes: 60
+  options:
+    # Reading secret material is off by default: listing a secret is cheap and
+    # safe, decrypting every secret in an account is neither.
+    read-secret-content: false
+    scan-compute-filesystems: true
+    max-resources-per-service: 5000
+  compute:
+    command-timeout-seconds: 120
+    max-targets-per-region: 200
+    target-concurrency: 10
+  # Qualified (AWS:S3) or bare (S3) service keys to exclude from every scan.
+  disabled-services: []

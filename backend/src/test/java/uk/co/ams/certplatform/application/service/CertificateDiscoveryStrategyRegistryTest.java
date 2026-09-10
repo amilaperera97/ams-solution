@@ -1,8 +1,8 @@
 package uk.co.ams.certplatform.application.service;
 
 import uk.co.ams.certplatform.application.port.CertificateDiscoveryStrategy;
-import uk.co.ams.certplatform.application.port.DiscoveryCapability;
 import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+import uk.co.ams.certplatform.domain.model.DiscoveryServiceDescriptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -15,40 +15,88 @@ import static org.mockito.Mockito.*;
 class CertificateDiscoveryStrategyRegistryTest {
 
     private CertificateDiscoveryStrategyRegistry registry;
+    private CertificateDiscoveryStrategy awsCloudFront;
 
     @BeforeEach
     void setUp() {
-        CertificateDiscoveryStrategy awsEc2Strategy = mock(CertificateDiscoveryStrategy.class);
-        when(awsEc2Strategy.capability()).thenReturn(new DiscoveryCapability(CloudProviderType.AWS, "EC2", "AwsEc2Discovery"));
-
-        CertificateDiscoveryStrategy awsAcmStrategy = mock(CertificateDiscoveryStrategy.class);
-        when(awsAcmStrategy.capability()).thenReturn(new DiscoveryCapability(CloudProviderType.AWS, "ACM", "AwsAcmDiscovery"));
-
-        CertificateDiscoveryStrategy azureVmStrategy = mock(CertificateDiscoveryStrategy.class);
-        when(azureVmStrategy.capability()).thenReturn(new DiscoveryCapability(CloudProviderType.AZURE, "VM", "AzureVmDiscovery"));
-
-        List<CertificateDiscoveryStrategy> strategies = Arrays.asList(awsEc2Strategy, awsAcmStrategy, azureVmStrategy);
-        registry = new CertificateDiscoveryStrategyRegistry(strategies);
+        registry = new CertificateDiscoveryStrategyRegistry(Arrays.asList(
+                strategyFor(descriptor(CloudProviderType.AWS, "EC2", "EC2 instance filesystems")
+                        .aliases("EC2_FILESYSTEM").build()),
+                strategyFor(descriptor(CloudProviderType.AWS, "ACM", "Certificate Manager").build()),
+                awsCloudFront = strategyFor(descriptor(CloudProviderType.AWS, "CLOUDFRONT", "CloudFront")
+                        .global("us-east-1").build()),
+                strategyFor(descriptor(CloudProviderType.AWS, "S3", "S3 objects")
+                        .phase(2).notImplemented().build()),
+                strategyFor(descriptor(CloudProviderType.AZURE, "VM", "Virtual Machines").build())));
     }
 
     @Test
-    void shouldFindStrategiesByProvider() {
-        List<CertificateDiscoveryStrategy> awsStrategies = registry.getAllSupportedStrategies(CloudProviderType.AWS);
-        assertEquals(2, awsStrategies.size());
-        assertTrue(awsStrategies.stream().anyMatch(s -> s.capability().getService().equals("EC2")));
-        assertTrue(awsStrategies.stream().anyMatch(s -> s.capability().getService().equals("ACM")));
+    void listsEveryServiceRegisteredForAProvider() {
+        List<DiscoveryServiceDescriptor> aws = registry.descriptorsFor(CloudProviderType.AWS);
+
+        assertEquals(4, aws.size());
+        assertTrue(aws.stream().anyMatch(d -> d.key().equals("EC2")));
+        assertTrue(aws.stream().anyMatch(d -> d.key().equals("ACM")));
     }
 
     @Test
-    void shouldFindStrategyByProviderAndService() {
-        List<CertificateDiscoveryStrategy> strategy = registry.findStrategies(CloudProviderType.AWS, "EC2", null);
-        assertEquals(1, strategy.size());
-        assertEquals("AwsEc2Discovery", strategy.get(0).capability().getCapabilityName());
+    void separatesServicesThatCanActuallyRunFromRegisteredPlaceholders() {
+        List<DiscoveryServiceDescriptor> implemented = registry.implementedDescriptorsFor(CloudProviderType.AWS);
+
+        assertEquals(3, implemented.size());
+        assertTrue(implemented.stream().noneMatch(d -> d.key().equals("S3")),
+                "a registered-but-unbuilt service must not be scanned by default");
     }
 
     @Test
-    void shouldReturnEmptyWhenNoProviderStrategyMatches() {
-        List<CertificateDiscoveryStrategy> gcpStrategies = registry.getAllSupportedStrategies(CloudProviderType.GCP);
-        assertTrue(gcpStrategies.isEmpty());
+    void resolvesAServiceByCanonicalKeyIgnoringCase() {
+        assertTrue(registry.resolve(CloudProviderType.AWS, "acm").isPresent());
+        assertTrue(registry.resolve(CloudProviderType.AWS, " ACM ").isPresent());
+    }
+
+    @Test
+    void resolvesAServiceByAliasSoOlderSavedScansKeepWorking() {
+        assertEquals("EC2", registry.resolve(CloudProviderType.AWS, "EC2_FILESYSTEM").orElseThrow().key());
+    }
+
+    @Test
+    void doesNotResolveAServiceBelongingToADifferentProvider() {
+        assertTrue(registry.resolve(CloudProviderType.AWS, "VM").isEmpty());
+        assertTrue(registry.resolve(CloudProviderType.GCP, "ACM").isEmpty());
+    }
+
+    @Test
+    void returnsTheStrategyBehindADescriptor() {
+        DiscoveryServiceDescriptor cloudFront =
+                registry.resolve(CloudProviderType.AWS, "CLOUDFRONT").orElseThrow();
+
+        assertSame(awsCloudFront, registry.strategyFor(cloudFront).orElseThrow());
+    }
+
+    @Test
+    void hasNothingForAProviderWithNoStrategies() {
+        assertTrue(registry.descriptorsFor(CloudProviderType.GCP).isEmpty());
+    }
+
+    @Test
+    void refusesToStartWhenTwoStrategiesClaimTheSameService() {
+        List<CertificateDiscoveryStrategy> clashing = Arrays.asList(
+                strategyFor(descriptor(CloudProviderType.AWS, "ACM", "Certificate Manager").build()),
+                strategyFor(descriptor(CloudProviderType.AWS, "ACM", "Certificate Manager again").build()));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> new CertificateDiscoveryStrategyRegistry(clashing));
+        assertTrue(failure.getMessage().contains("AWS:ACM"));
+    }
+
+    private static DiscoveryServiceDescriptor.Builder descriptor(CloudProviderType provider,
+                                                                 String key, String label) {
+        return DiscoveryServiceDescriptor.builder(provider, key, label);
+    }
+
+    private static CertificateDiscoveryStrategy strategyFor(DiscoveryServiceDescriptor descriptor) {
+        CertificateDiscoveryStrategy strategy = mock(CertificateDiscoveryStrategy.class);
+        when(strategy.descriptor()).thenReturn(descriptor);
+        return strategy;
     }
 }

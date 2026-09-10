@@ -3,9 +3,7 @@ package uk.co.ams.certplatform.infrastructure.cloud.aws;
 import uk.co.ams.certplatform.application.port.CloudProviderAdapter;
 import uk.co.ams.certplatform.domain.enums.CloudProviderType;
 import uk.co.ams.certplatform.domain.model.Account;
-import uk.co.ams.certplatform.domain.model.CertificateScanResult;
 import uk.co.ams.certplatform.domain.model.ConnectionTestResult;
-import uk.co.ams.certplatform.domain.model.ScanContext;
 import uk.co.ams.certplatform.shared.config.CloudProviderProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,8 +11,6 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
-
-import java.util.Collections;
 
 @Component
 public class AwsCloudProviderAdapter implements CloudProviderAdapter {
@@ -76,13 +72,6 @@ public class AwsCloudProviderAdapter implements CloudProviderAdapter {
         }
         return new ConnectionTestResult("FAILED", CloudProviderType.AWS, account.getAccountId(),
                 "Unable to authenticate with cloud provider");
-    }
-
-    @Override
-    public CertificateScanResult scanCertificates(ScanContext context) {
-        // Scanning runs through the CertificateDiscoveryStrategy implementations
-        // (see AwsAcmCertificateDiscoveryStrategy); this entry point is unused.
-        return new CertificateScanResult(Collections.emptyList(), "COMPLETED", "Scanned successfully");
     }
 
     private static String rootMessage(Throwable t) {

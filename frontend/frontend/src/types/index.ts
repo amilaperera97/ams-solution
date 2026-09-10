@@ -60,6 +60,29 @@ export interface CloudProviderConfig {
 /** Keyed by provider type, e.g. { AWS: { mode: 'REAL' } }. */
 export type CloudProviderConfigMap = Record<string, CloudProviderConfig>;
 
+/**
+ * One scannable service, as reported by GET /api/v1/config/discovery-capabilities.
+ * The scan picker renders whatever the backend returns, so onboarding a service
+ * needs no frontend change.
+ */
+export interface DiscoveryCapability {
+  provider: string;
+  /** Canonical key to send in a scan's `services` array. */
+  key: string;
+  label: string;
+  /** Rollout phase, used to group the picker. */
+  phase: number;
+  scope: 'REGIONAL' | 'GLOBAL';
+  /** Region a GLOBAL service is addressed in; null when REGIONAL. */
+  homeRegion?: string | null;
+  aliases: string[];
+  requiredPermissions: string[];
+  implemented: boolean;
+  disabled: boolean;
+  /** Implemented and not switched off - the only ones worth ticking. */
+  selectable: boolean;
+}
+
 export interface Certificate {
   id: string;
   name: string;

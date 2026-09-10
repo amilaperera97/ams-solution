@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '../services/api';
-import type { Organization, Provider, Environment, Account, Certificate, DashboardStats } from '../types';
+import type { Organization, Provider, Environment, Account, Certificate, DashboardStats, DiscoveryCapability } from '../types';
 
 export const useOrganization = () => {
   return useQuery({
@@ -59,5 +59,18 @@ export const useDashboardStats = () => {
   return useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: () => fetchApi<DashboardStats>('/api/v1/dashboard/stats'),
+  });
+};
+
+/**
+ * The services this deployment can scan. Cached for the session: the catalogue
+ * is fixed at backend startup, so re-fetching it per modal open is waste.
+ */
+export const useDiscoveryCapabilities = (provider?: string) => {
+  return useQuery({
+    queryKey: ['discovery-capabilities', provider],
+    queryFn: () => fetchApi<DiscoveryCapability[]>(
+      `/api/v1/config/discovery-capabilities${provider ? `?provider=${provider}` : ''}`),
+    staleTime: Infinity,
   });
 };
