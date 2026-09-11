@@ -1,0 +1,704 @@
+# ===========================================================================
+# Certificate Discovery Test Matrix - Phase 1 (eu-west-1)
+#
+# Human-readable mirror of local.certificate_scenarios_all in locals.tf.
+# locals.tf is the source of truth for Terraform; this file is the source of
+# truth for humans and for any test harness that wants the matrix without
+# running Terraform.
+#
+# Placeholders:
+#   <PUB>  var.certificate_test_domain       (default: example.com)
+#   <INT>  var.certificate_internal_domain   (default: cert-lab.internal)
+#
+# expiryScenario:  EXPIRED | CRITICAL (<=7d) | WARNING (<=90d) | HEALTHY
+# attachment:      ATTACHED | UNATTACHED | REFERENCED_BY_CONFIGURATION
+#                  | NOT_APPLICABLE
+# ===========================================================================
+
+meta:
+  phase: phase-1
+  region: eu-west-1
+  totalScenarios: 30
+  awsManaged: 10
+  customerManaged: 20
+  namePrefix: certificate-test-lab-phase1
+  expiryCoverage:
+    EXPIRED: [phase1-cert-024, phase1-cert-030]
+    within1Day: [phase1-cert-022]
+    within7Days: [phase1-cert-014, phase1-cert-027]
+    within30Days: [phase1-cert-021, phase1-cert-026]
+    within60Days: [phase1-cert-013, phase1-cert-029]
+    within90Days: [phase1-cert-023]
+    moreThanOneYear: [phase1-cert-015, phase1-cert-016, phase1-cert-020, phase1-cert-025]
+  keyAlgorithmCoverage:
+    RSA-2048: [001, 002, 003, 004, 006, 007, 008, 010, 011, 012, 013, 014, 015, 016, 018, 019, 020, 021, 022, 023, 024, 026, 027, 029, 030]
+    RSA-4096: [025]
+    ECDSA-P256: [009, 017]
+    ECDSA-P384: [028]
+  notImplementedInPhase1:
+    - certificateId: phase1-cert-005
+      reason: CloudFront requires an ACM certificate in us-east-1; Phase 1 is eu-west-1 only.
+      status: DEFERRED_TO_PHASE_2
+
+# ===========================================================================
+# 001-010  AWS-MANAGED / ACM-ISSUED
+# ===========================================================================
+certificates:
+
+  - certificateId: phase1-cert-001
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: cert001.<PUB>
+    sans: [cert001.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: ATTACHED_WHEN_attach_acm_issued_certificates
+    awsService: ELBV2_ALB_HTTPS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC
+    expectedScannerClassification: AWS_MANAGED_AUTO_RENEWABLE
+    implemented: true
+
+  - certificateId: phase1-cert-002
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: "*.app002.<PUB>"
+    sans: ["*.app002.<PUB>", "app002.<PUB>"]
+    wildcard: true
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: ATTACHED_WHEN_attach_acm_issued_certificates
+    awsService: ELBV2_ALB_HTTPS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC
+    expectedScannerClassification: AWS_MANAGED_AUTO_RENEWABLE_WILDCARD
+    implemented: true
+
+  - certificateId: phase1-cert-003
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: cert003.<PUB>
+    sans: [cert003.<PUB>, www.cert003.<PUB>, api.cert003.<PUB>, admin.cert003.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: ATTACHED_WHEN_attach_acm_issued_certificates
+    awsService: ELBV2_ALB_HTTPS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC
+    expectedScannerClassification: AWS_MANAGED_AUTO_RENEWABLE_MULTI_SAN
+    implemented: true
+
+  - certificateId: phase1-cert-004
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: api004.<PUB>
+    sans: [api004.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: ATTACHED_WHEN_attach_acm_issued_certificates
+    awsService: API_GATEWAY_REGIONAL_CUSTOM_DOMAIN
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: APIGATEWAY_GET_DOMAIN_NAMES
+    expectedRenewalType: ACM_AUTOMATIC
+    expectedScannerClassification: AWS_MANAGED_AUTO_RENEWABLE
+    implemented: true
+
+  - certificateId: phase1-cert-005
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: NOT_CREATED
+    issuanceMethod: NOT_IMPLEMENTED_IN_PHASE_1
+    domain: cdn005.<PUB>
+    sans: [cdn005.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: NOT_APPLICABLE
+    validityDays: 0
+    attachment: NOT_APPLICABLE
+    awsService: CLOUDFRONT_DISTRIBUTION
+    storageLocation: DEFERRED_TO_PHASE_2
+    expectedDiscoveryMechanism: CLOUDFRONT_LIST_DISTRIBUTIONS
+    expectedRenewalType: ACM_AUTOMATIC
+    expectedScannerClassification: DEFERRED_TO_PHASE_2
+    implemented: false
+    limitation: >-
+      A CloudFront distribution can only use an ACM certificate issued in
+      us-east-1. Phase 1 is eu-west-1 only, so no valid configuration exists
+      and none is created. Phase 1 instead offers a distribution using the
+      DEFAULT CloudFront certificate (enable_cloudfront = true), which needs
+      no ACM certificate in any region. See cloudfront/README.md.
+
+  - certificateId: phase1-cert-006
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: nlb006.<PUB>
+    sans: [nlb006.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: ATTACHED_WHEN_attach_acm_issued_certificates
+    awsService: ELBV2_NLB_TLS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ELBV2_DESCRIBE_LISTENER_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC
+    expectedScannerClassification: AWS_MANAGED_AUTO_RENEWABLE
+    implemented: true
+
+  - certificateId: phase1-cert-007
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: sni007.<PUB>
+    sans: [sni007.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: ATTACHED_WHEN_attach_acm_issued_certificates
+    awsService: ELBV2_ALB_HTTPS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ELBV2_DESCRIBE_LISTENER_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC
+    expectedScannerClassification: AWS_MANAGED_AUTO_RENEWABLE
+    implemented: true
+    purpose: Third certificate on the SAME ALB HTTPS listener - proves 1:N discovery.
+
+  - certificateId: phase1-cert-008
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: unused008.<PUB>
+    sans: [unused008.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: UNATTACHED
+    awsService: NONE
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC_BUT_INELIGIBLE_WHILE_UNUSED
+    expectedScannerClassification: AWS_MANAGED_UNUSED
+    implemented: true
+    note: >-
+      ACM does not auto-renew a certificate that is not associated with an AWS
+      service, so RenewalEligibility stays INELIGIBLE even though the
+      certificate is ACM-issued. Your scanner must model that.
+
+  - certificateId: phase1-cert-009
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: ecdsa009.<PUB>
+    sans: [ecdsa009.<PUB>, alt1.ecdsa009.<PUB>, alt2.ecdsa009.<PUB>]
+    wildcard: false
+    certificateType: ECDSA-P256
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: UNATTACHED
+    awsService: NONE
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC_BUT_INELIGIBLE_WHILE_UNUSED
+    expectedScannerClassification: AWS_MANAGED_ECDSA_MULTI_SAN_UNUSED
+    implemented: true
+
+  - certificateId: phase1-cert-010
+    category: AWS_MANAGED_ACM_ISSUED
+    management: AWS_MANAGED
+    acmPresence: ACM_ISSUED
+    issuanceMethod: ACM_PUBLIC_DNS_VALIDATED | ACM_PRIVATE_CA_ISSUED
+    domain: "*.svc010.<PUB>"
+    sans: ["*.svc010.<PUB>", "svc010.<PUB>"]
+    wildcard: true
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 395
+    attachment: UNATTACHED
+    awsService: NONE
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: ACM_AUTOMATIC_BUT_INELIGIBLE_WHILE_UNUSED
+    expectedScannerClassification: AWS_MANAGED_WILDCARD_UNUSED
+    implemented: true
+
+# ===========================================================================
+# 011-020  CUSTOMER-MANAGED, IMPORTED INTO ACM (018 = IAM store instead)
+# ===========================================================================
+
+  - certificateId: phase1-cert-011
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: nlb011.<INT>
+    sans: [nlb011.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 365
+    attachment: ATTACHED
+    awsService: ELBV2_NLB_TLS_LISTENER_DEFAULT
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ELBV2_DESCRIBE_LISTENERS
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_ATTACHED
+    implemented: true
+
+  - certificateId: phase1-cert-012
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: "*.alb012.<INT>"
+    sans: ["*.alb012.<INT>", "alb012.<INT>"]
+    wildcard: true
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 365
+    attachment: ATTACHED
+    awsService: ELBV2_ALB_HTTPS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ELBV2_DESCRIBE_LISTENER_CERTIFICATES
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_WILDCARD_ATTACHED
+    implemented: true
+
+  - certificateId: phase1-cert-013
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: multi013.<INT>
+    sans: [multi013.<INT>, www.multi013.<INT>, api.multi013.<INT>, admin.multi013.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: WARNING
+    validityDays: 60
+    attachment: ATTACHED
+    awsService: ELBV2_ALB_HTTPS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ELBV2_DESCRIBE_LISTENER_CERTIFICATES
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_MULTI_SAN_EXPIRING_SOON
+    implemented: true
+    note: Highest-priority finding shape - in use, expiring, not auto-renewable.
+
+  - certificateId: phase1-cert-014
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: expiring014.<INT>
+    sans: [expiring014.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: CRITICAL
+    validityDays: 7
+    attachment: UNATTACHED
+    awsService: NONE
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_CRITICAL_UNUSED
+    implemented: true
+    limitation: >-
+      ACM refuses to import an already-expired certificate, so 7 days is the
+      nearest-to-expiry certificate that can exist in ACM. No EXPIRED scenario
+      lives in ACM anywhere in this lab.
+
+  - certificateId: phase1-cert-015
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: LAB_CA_SIGNED_TLS_PROVIDER
+    domain: longlived015.<INT>
+    sans: [longlived015.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 1095
+    attachment: UNATTACHED
+    awsService: NONE
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_LONG_LIVED_CA_SIGNED
+    implemented: true
+
+  - certificateId: phase1-cert-016
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: alb016.<INT>
+    sans: [alb016.<INT>, www.alb016.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 730
+    attachment: ATTACHED
+    awsService: ELBV2_ALB_HTTPS_LISTENER_DEFAULT
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ELBV2_DESCRIBE_LISTENERS
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_ATTACHED
+    implemented: true
+    duplicatedBy: phase1-cert-020
+
+  - certificateId: phase1-cert-017
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: LAB_CA_SIGNED_TLS_PROVIDER
+    domain: ecdsa017.<INT>
+    sans: [ecdsa017.<INT>]
+    wildcard: false
+    certificateType: ECDSA-P256
+    expiryScenario: HEALTHY
+    validityDays: 365
+    attachment: ATTACHED
+    awsService: ELBV2_ALB_HTTPS_LISTENER_SNI
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ELBV2_DESCRIBE_LISTENER_CERTIFICATES
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_ECDSA_ATTACHED
+    implemented: true
+    note: >-
+      Proves an ALB serves RSA and ECDSA certificates from the SAME listener.
+      ELB supports P-256 and P-384 only; P-521 is not supported and is not used.
+
+  - certificateId: phase1-cert-018
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: LAB_CA_SIGNED_TLS_PROVIDER
+    domain: iam018.<INT>
+    sans: [iam018.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 365
+    attachment: UNATTACHED
+    awsService: IAM_SERVER_CERTIFICATE_STORE
+    storageLocation: IAM_SERVER_CERTIFICATE
+    region: global
+    expectedDiscoveryMechanism: IAM_LIST_SERVER_CERTIFICATES
+    expectedRenewalType: MANUAL_DELETE_AND_REUPLOAD
+    expectedScannerClassification: LEGACY_IAM_CERTIFICATE_STORE
+    implemented: true
+    limitation: >-
+      IMPLEMENTED, not faked. IAM is a GLOBAL service so this certificate has
+      no region. It is left unattached because an IAM server certificate can
+      only be consumed by a Classic Load Balancer or CloudFront, and this lab
+      creates neither. Filed under the IAM path /certificate-test-lab/.
+
+  - certificateId: phase1-cert-019
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: api019.<PUB>
+    sans: [api019.<PUB>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 365
+    attachment: ATTACHED
+    awsService: API_GATEWAY_REGIONAL_CUSTOM_DOMAIN
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: APIGATEWAY_GET_DOMAIN_NAMES
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: CUSTOMER_MANAGED_IMPORTED_ATTACHED
+    implemented: true
+
+  - certificateId: phase1-cert-020
+    category: CUSTOMER_MANAGED_IMPORTED_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: ACM_IMPORTED
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: alb016.<INT>
+    sans: [alb016.<INT>, www.alb016.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: HEALTHY
+    validityDays: 730
+    attachment: UNATTACHED
+    awsService: NONE
+    storageLocation: AWS_CERTIFICATE_MANAGER
+    expectedDiscoveryMechanism: ACM_LIST_CERTIFICATES
+    expectedRenewalType: MANUAL_REIMPORT
+    expectedScannerClassification: DUPLICATE_CERTIFICATE_UNUSED
+    duplicateOf: phase1-cert-016
+    implemented: true
+    note: >-
+      Identical subject CN and SAN set to phase1-cert-016, different key pair,
+      serial and SHA-256 fingerprint. Group by subject+SAN, distinguish by
+      fingerprint, and flag that one copy is attached and the other is dead.
+
+# ===========================================================================
+# 021-030  CUSTOMER-MANAGED, STORED OUTSIDE ACM
+# ===========================================================================
+
+  - certificateId: phase1-cert-021
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: sm021.<INT>
+    sans: [sm021.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: WARNING
+    validityDays: 30
+    attachment: UNATTACHED
+    awsService: SECRETS_MANAGER
+    storageLocation: /certificate-test/phase1/cert-021
+    expectedDiscoveryMechanism: SECRETSMANAGER_LIST_SECRETS_AND_GET_SECRET_VALUE
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: SECRET_STORE_CERTIFICATE_EXPIRING_SOON
+    implemented: true
+    secretFields: [certificate, privateKey, certificateChain, certificateId, domain, notAfter]
+
+  - certificateId: phase1-cert-022
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: "*.sm022.<INT>"
+    sans: ["*.sm022.<INT>", "sm022.<INT>"]
+    wildcard: true
+    certificateType: RSA-2048
+    expiryScenario: CRITICAL
+    validityDays: 1
+    attachment: UNATTACHED
+    awsService: SECRETS_MANAGER
+    storageLocation: /certificate-test/phase1/cert-022
+    expectedDiscoveryMechanism: SECRETSMANAGER_LIST_SECRETS_AND_GET_SECRET_VALUE
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: SECRET_STORE_WILDCARD_CRITICAL
+    implemented: true
+    note: Expires ~24 hours after apply, becoming a bonus EXPIRED case if left running.
+
+  - certificateId: phase1-cert-023
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: ps023.<INT>
+    sans: [ps023.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: WARNING
+    validityDays: 90
+    attachment: UNATTACHED
+    awsService: SSM_PARAMETER_STORE
+    storageLocation:
+      - /certificate-test/phase1/cert-023/certificate   # String
+      - /certificate-test/phase1/cert-023/chain         # String
+      - /certificate-test/phase1/cert-023/private-key   # SecureString
+    expectedDiscoveryMechanism: SSM_GET_PARAMETERS_BY_PATH
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: PARAMETER_STORE_CERTIFICATE
+    implemented: true
+
+  - certificateId: phase1-cert-024
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: OPENSSL_LAB_CA_SIGNED_BACKDATED
+    domain: ps024-expired.<INT>
+    sans: [ps024-expired.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: EXPIRED
+    validityDays: -35
+    attachment: UNATTACHED
+    awsService: SSM_PARAMETER_STORE
+    storageLocation:
+      - /certificate-test/phase1/cert-024/certificate
+      - /certificate-test/phase1/cert-024/chain
+      - /certificate-test/phase1/cert-024/private-key
+    expectedDiscoveryMechanism: SSM_GET_PARAMETERS_BY_PATH
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: PARAMETER_STORE_CERTIFICATE_EXPIRED
+    implemented: requires enable_openssl_generated_certificates
+    limitation: >-
+      notBefore 400 days ago, notAfter 35 days ago. Produced by
+      "openssl ca -startdate -enddate" because the Terraform tls provider
+      always sets notBefore to now, and ACM refuses expired imports.
+
+  - certificateId: phase1-cert-025
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: LAB_CA_SIGNED_TLS_PROVIDER
+    domain: s3-025.<INT>
+    sans: [s3-025.<INT>, bucket.s3-025.<INT>, objects.s3-025.<INT>]
+    wildcard: false
+    certificateType: RSA-4096
+    expiryScenario: HEALTHY
+    validityDays: 730
+    attachment: UNATTACHED
+    awsService: S3
+    storageLocation:
+      - s3://<bucket>/certificates/phase1-cert-025/cert.pem
+      - s3://<bucket>/certificates/phase1-cert-025/cert.crt
+      - s3://<bucket>/certificates/phase1-cert-025/chain.pem
+      - s3://<bucket>/certificates/phase1-cert-025/fullchain.pem
+      - s3://<bucket>/certificates/phase1-cert-025/cert.key
+    expectedDiscoveryMechanism: S3_LIST_OBJECTS_AND_GET_OBJECT
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: OBJECT_STORE_CERTIFICATE_RSA4096
+    implemented: requires enable_s3
+
+  - certificateId: phase1-cert-026
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: OPENSSL_LAB_CA_SIGNED
+    domain: s3-026.<INT>
+    sans: [s3-026.<INT>, keystore026.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: WARNING
+    validityDays: 30
+    attachment: UNATTACHED
+    awsService: S3
+    storageLocation:
+      - s3://<bucket>/certificates/phase1-cert-026/cert.crt
+      - s3://<bucket>/certificates/phase1-cert-026/test.p12
+      - s3://<bucket>/certificates/phase1-cert-026/test.pfx
+    expectedDiscoveryMechanism: S3_LIST_OBJECTS_AND_GET_OBJECT
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: OBJECT_STORE_PKCS12_KEYSTORE
+    implemented: requires enable_openssl_generated_certificates and enable_s3
+    keystorePassword: var.pkcs12_password
+    limitation: No Terraform resource can emit a PKCS#12 file; the OpenSSL helper does it.
+
+  - certificateId: phase1-cert-027
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: nginx027.<INT>
+    sans: [nginx027.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: CRITICAL
+    validityDays: 7
+    attachment: ATTACHED
+    awsService: EC2_FILESYSTEM_NGINX
+    storageLocation:
+      - /etc/nginx/ssl/nginx-cert-lab.pem
+      - /etc/nginx/ssl/nginx-cert-lab.key
+      - /etc/nginx/ssl/nginx-cert-lab-fullchain.pem
+    usedBy: nginx on port 443 via /etc/nginx/conf.d/certificate-lab.conf
+    expectedDiscoveryMechanism: SSM_RUN_COMMAND_FILESYSTEM_SCAN
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: FILESYSTEM_CERTIFICATE_IN_USE_CRITICAL
+    implemented: requires enable_ec2
+
+  - certificateId: phase1-cert-028
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: apache028.<INT>
+    sans: [apache028.<INT>]
+    wildcard: false
+    certificateType: ECDSA-P384
+    expiryScenario: HEALTHY
+    validityDays: 365
+    attachment: ATTACHED
+    awsService: EC2_FILESYSTEM_APACHE
+    storageLocation:
+      - /etc/httpd/conf/ssl/apache-cert-lab.crt
+      - /etc/httpd/conf/ssl/apache-cert-lab.key
+      - /etc/apache2/ssl/apache-cert-lab.crt
+      - /etc/apache2/ssl/apache-cert-lab.key
+    usedBy: Apache httpd on port 8443 via /etc/httpd/conf.d/certificate-lab-ssl.conf
+    expectedDiscoveryMechanism: SSM_RUN_COMMAND_FILESYSTEM_SCAN
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: FILESYSTEM_CERTIFICATE_IN_USE_ECDSA
+    implemented: requires enable_ec2
+    note: Deployed to both RHEL-style and Debian-style paths. Apache uses 8443 because nginx owns 443.
+
+  - certificateId: phase1-cert-029
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: SELF_SIGNED_TLS_PROVIDER
+    domain: springboot029.<INT>
+    sans: [springboot029.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: WARNING
+    validityDays: 60
+    attachment: REFERENCED_BY_CONFIGURATION
+    awsService: EC2_FILESYSTEM_JAVA_SPRING_BOOT
+    storageLocation:
+      - /opt/application/certs/application.pem
+      - /opt/application/certs/application.key
+      - /opt/application/certs/keystore.p12
+      - /opt/application/certs/keystore.pfx
+      - /opt/application/certs/keystore.jks
+      - /opt/application/certs/truststore.jks
+      - /opt/application/config/application.properties
+    expectedDiscoveryMechanism: SSM_RUN_COMMAND_FILESYSTEM_SCAN
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: JAVA_KEYSTORE_CERTIFICATE
+    implemented: requires enable_ec2
+    keystorePassword: var.pkcs12_password
+    note: >-
+      JKS and PKCS#12 are built ON THE INSTANCE with keytool and openssl, so
+      the machine running Terraform needs no Java. No Spring Boot application
+      is installed - the objective is discovery, not running a service.
+
+  - certificateId: phase1-cert-030
+    category: CUSTOMER_MANAGED_NON_ACM
+    management: CUSTOMER_MANAGED
+    acmPresence: NOT_IN_ACM
+    issuanceMethod: OPENSSL_LAB_CA_SIGNED_BACKDATED
+    domain: legacy030.<INT>
+    sans: [legacy030.<INT>, old.legacy030.<INT>]
+    wildcard: false
+    certificateType: RSA-2048
+    expiryScenario: EXPIRED
+    validityDays: -90
+    attachment: UNATTACHED
+    awsService: EC2_FILESYSTEM_LEGACY
+    storageLocation:
+      - /etc/ssl/certs/legacy-cert-lab.crt
+      - /etc/ssl/private/legacy-cert-lab.key
+      - /opt/certificates/legacy-cert-lab.pem
+      - /opt/certificates/legacy-cert-lab.crt
+    expectedDiscoveryMechanism: SSM_RUN_COMMAND_FILESYSTEM_SCAN
+    expectedRenewalType: MANUAL_EXTERNAL
+    expectedScannerClassification: FILESYSTEM_CERTIFICATE_EXPIRED_ORPHANED
+    implemented: requires enable_openssl_generated_certificates, enable_s3 and enable_ec2
+    note: The classic forgotten certificate - expired 90 days ago, used by nothing.

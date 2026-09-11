@@ -1,0 +1,142 @@
+# ===========================================================================
+# Phase 1 - example variables
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# Every value below is already the default, so an empty terraform.tfvars
+# gives you the safe, cheap, self-contained configuration. Uncomment only
+# what you want to change.
+#
+# terraform.tfvars is gitignored.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+# aws_region       = "eu-west-1"   # Phase 1 is eu-west-1 only
+# project_name     = "certificate-test-lab"
+# environment_name = "phase1"
+
+# additional_tags = {
+#   Owner     = "platform-security"
+#   CostCentre = "TEST-0001"
+#   TicketRef = "CERT-1234"
+# }
+
+# ---------------------------------------------------------------------------
+# Test domains
+#
+# You do NOT need to own certificate_test_domain. With the default settings
+# the ACM-issued certificates simply sit in PENDING_VALIDATION, which is
+# itself a discovery test case, and every ATTACHED certificate comes from an
+# ACM import instead.
+# ---------------------------------------------------------------------------
+# certificate_test_domain     = "example.com"
+# certificate_internal_domain = "cert-lab.internal"
+
+# ---------------------------------------------------------------------------
+# ACM issuance strategy - pick ONE of the three below
+# ---------------------------------------------------------------------------
+
+# OPTION A (DEFAULT, FREE): public certificates left PENDING_VALIDATION.
+# acm_issuance_mode              = "public_dns_validation"
+# create_route53_test_zone       = false
+# wait_for_acm_dns_validation    = false
+# attach_acm_issued_certificates = false
+
+# OPTION B: you own a public domain and will delegate a subdomain to the
+# dedicated test zone this lab creates.
+#   1. apply once with create_route53_test_zone = true
+#   2. read `terraform output route53_test_zone_name_servers`
+#   3. create the NS delegation at your registrar
+#   4. apply again with the two settings below
+# certificate_test_domain        = "certlab.mycompany.com"
+# create_route53_test_zone       = true
+# wait_for_acm_dns_validation    = true
+# attach_acm_issued_certificates = true
+
+# OPTION C: AWS Private CA. Real ISSUED, auto-renewing, attachable
+# ACM-managed certificates with no DNS dependency.
+#
+#   !! COST WARNING !!
+#   GENERAL_PURPOSE        ~400 USD/month, pro-rated, plus per-certificate
+#   SHORT_LIVED_CERTIFICATE ~50 USD/month, but certificates last only 7 days
+#
+# acm_issuance_mode              = "private_ca"
+# enable_private_ca              = true
+# private_ca_usage_mode          = "GENERAL_PURPOSE"
+# attach_acm_issued_certificates = true
+
+# ---------------------------------------------------------------------------
+# Feature switches
+# ---------------------------------------------------------------------------
+# enable_ec2                            = true   # ~9 USD/month
+# enable_alb                            = true   # ~18 USD/month
+# enable_nlb                            = true   # ~20 USD/month
+# enable_api_gateway                    = true   # no hourly charge
+# enable_cloudfront                     = false  # slow create/destroy
+# enable_secrets_manager                = true   # 0.40 USD/secret/month
+# enable_parameter_store                = true   # free (Standard tier)
+# enable_s3                             = true   # pennies
+# enable_iam_server_certificate         = true   # free
+# enable_openssl_generated_certificates = true   # needs bash + openssl
+# enable_inventory_file                 = true
+
+# A minimal, near-zero-cost run that still exercises ACM, Secrets Manager,
+# Parameter Store, S3 and IAM:
+# enable_ec2 = false
+# enable_alb = false
+# enable_nlb = false
+
+# ---------------------------------------------------------------------------
+# Networking
+# ---------------------------------------------------------------------------
+# vpc_cidr                = "10.42.0.0/16"
+# subnet_count            = 2
+# enable_private_subnets  = false
+# enable_vpc_endpoints    = false   # ~7.50 USD/month per endpoint per AZ
+# internal_load_balancers = true    # nothing published to the internet
+# ssl_policy              = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+
+# Empty by default: the load balancers are reachable by nobody. Certificate
+# discovery reads AWS APIs and does not need network access.
+# allowed_ingress_cidrs = ["203.0.113.10/32"]
+
+# ---------------------------------------------------------------------------
+# EC2 / SSM / SSH
+# ---------------------------------------------------------------------------
+# ec2_instance_type    = "t3.micro"
+# ec2_root_volume_size = 10
+
+# SSH FALLBACK - leave disabled unless you specifically need it.
+# SSM Run Command is the primary scanning path and requires NO inbound port.
+# When enable_ssh_fallback = false, no port 22 rule exists at all.
+#
+# enable_ssh_fallback = true
+# ssh_allowed_cidrs   = ["203.0.113.10/32"]   # your egress IP, as a /32
+# ssh_public_key      = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@example"
+#
+# 0.0.0.0/0 on port 22 additionally requires:
+# allow_ssh_from_anywhere = true
+
+# ---------------------------------------------------------------------------
+# Stores
+# ---------------------------------------------------------------------------
+# certificate_store_path_prefix = "/certificate-test/phase1"
+# secrets_recovery_window_days  = 0      # 0 = delete immediately on destroy
+# s3_bucket_name_override       = ""     # empty = auto-generated with a suffix
+# s3_force_destroy              = true
+# s3_enable_versioning          = true
+
+# TEST VALUE ONLY. Stored in Terraform state and written to the instance.
+# Never put a real password here.
+# pkcs12_password = "certificate-test-lab"
+
+# Bump to force the OpenSSL helper to regenerate (e.g. to refresh the
+# 30-day and expired certificates after they drift).
+# openssl_generation_trigger = "v1"
+
+# ---------------------------------------------------------------------------
+# Self-check
+# ---------------------------------------------------------------------------
+# expected_certificate_scenario_count = 30

@@ -1,0 +1,274 @@
+#!/bin/bash
+# ---------------------------------------------------------------------------
+# Certificate test lab - EC2 certificate server bootstrap
+#
+# Lays down TEST certificate material in the filesystem locations a real
+# estate uses, and wires two of them into nginx and Apache so the
+# certificate-to-service relationship is genuinely observable.
+#
+# No private key is ever embedded in this script. Material is pulled from the
+# lab S3 bucket using the instance role, so nothing sensitive is visible in
+# instance metadata. If S3 is disabled, throwaway material is generated
+# locally with openssl.
+#
+# Progress log: /var/log/certificate-lab-bootstrap.log
+# ---------------------------------------------------------------------------
+set -euo pipefail
+exec > >(tee -a /var/log/certificate-lab-bootstrap.log) 2>&1
+echo "=== certificate-test-lab bootstrap starting $(date -u +%FT%TZ) ==="
+
+REGION="${aws_region}"
+BUCKET="${certificate_bucket_name}"
+STAGING_PREFIX="${ec2_staging_prefix}"
+KEYSTORE_PASSWORD='${keystore_password}'
+
+NGINX_CERT_ID="${nginx_certificate_id}"
+APACHE_CERT_ID="${apache_certificate_id}"
+JAVA_CERT_ID="${java_certificate_id}"
+EXPIRED_CERT_ID="${expired_certificate_id}"
+
+STAGE=/root/certificate-staging
+mkdir -p "$STAGE"
+chmod 700 "$STAGE"
+
+# ---------------------------------------------------------------------------
+# 1. Packages
+#    nginx  - serves the nginx scenario on 443
+#    httpd  - serves the Apache scenario on 8443
+#    java   - provides keytool for the JKS scenario
+#    openssl / jq - certificate tooling a scanner may shell out to
+# ---------------------------------------------------------------------------
+echo "--- installing packages"
+dnf -y install openssl jq nginx httpd mod_ssl java-17-amazon-corretto-headless
+
+# The SSM agent ships with Amazon Linux 2023; just make sure it is running.
+systemctl enable --now amazon-ssm-agent || true
+
+# ---------------------------------------------------------------------------
+# 2. Realistic certificate directories
+# ---------------------------------------------------------------------------
+echo "--- creating certificate directories"
+install -d -m 0755 /etc/ssl/certs
+install -d -m 0700 /etc/ssl/private
+install -d -m 0755 /etc/nginx/ssl
+install -d -m 0755 /etc/apache2/ssl
+install -d -m 0755 /etc/httpd/conf/ssl
+install -d -m 0755 /opt/certificates
+install -d -m 0755 /opt/application/certs
+install -d -m 0755 /opt/application/config
+
+# ---------------------------------------------------------------------------
+# 3. Fetch staged material, or generate it locally as a fallback
+# ---------------------------------------------------------------------------
+if [ -n "$BUCKET" ] && [ "$BUCKET" != "null" ]; then
+  echo "--- downloading staged certificate material from s3://$BUCKET/$STAGING_PREFIX/"
+  aws s3 cp "s3://$BUCKET/$STAGING_PREFIX/" "$STAGE/" --recursive --region "$REGION"
+else
+  echo "--- S3 disabled: generating throwaway self-signed material locally"
+  for pair in "$NGINX_CERT_ID:nginx-local.cert-lab.internal:7" \
+              "$APACHE_CERT_ID:apache-local.cert-lab.internal:365" \
+              "$JAVA_CERT_ID:springboot-local.cert-lab.internal:60"; do
+    cert_id="$(echo "$pair" | cut -d: -f1)"
+    cert_cn="$(echo "$pair" | cut -d: -f2)"
+    cert_days="$(echo "$pair" | cut -d: -f3)"
+    mkdir -p "$STAGE/$cert_id"
+    openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days "$cert_days" \
+      -keyout "$STAGE/$cert_id/cert.key" -out "$STAGE/$cert_id/cert.pem" \
+      -subj "/C=IE/O=Certificate Test Lab/OU=Phase 1/CN=$cert_cn" \
+      -addext "subjectAltName=DNS:$cert_cn"
+    cp "$STAGE/$cert_id/cert.pem" "$STAGE/$cert_id/fullchain.pem"
+  done
+  echo "NOTE: the EXPIRED filesystem scenario requires the S3 staging path"
+  echo "      because openssl back-dating is done by the Terraform helper."
+  EXPIRED_CERT_ID=""
+fi
+
+# ---------------------------------------------------------------------------
+# 4. place_certificate <cert-id> <dest-cert> <dest-key> [<dest-chain>]
+# ---------------------------------------------------------------------------
+place_certificate() {
+  cert_id="$1"; dest_cert="$2"; dest_key="$3"; dest_chain="$${4:-}"
+
+  if [ -z "$cert_id" ] || [ ! -f "$STAGE/$cert_id/cert.pem" ]; then
+    echo "    skipping $cert_id (no staged material)"
+    return 0
+  fi
+
+  install -m 0644 "$STAGE/$cert_id/cert.pem" "$dest_cert"
+  install -m 0600 "$STAGE/$cert_id/cert.key" "$dest_key"
+
+  if [ -n "$dest_chain" ] && [ -f "$STAGE/$cert_id/fullchain.pem" ]; then
+    install -m 0644 "$STAGE/$cert_id/fullchain.pem" "$dest_chain"
+  fi
+
+  echo "    placed $cert_id -> $dest_cert"
+  openssl x509 -in "$dest_cert" -noout -subject -enddate || true
+}
+
+echo "--- placing filesystem certificates"
+
+# nginx scenario: PEM + KEY under /etc/nginx/ssl
+place_certificate "$NGINX_CERT_ID" \
+  /etc/nginx/ssl/nginx-cert-lab.pem \
+  /etc/nginx/ssl/nginx-cert-lab.key \
+  /etc/nginx/ssl/nginx-cert-lab-fullchain.pem
+
+# Apache scenario: CRT + KEY under both the RHEL-style and Debian-style paths
+place_certificate "$APACHE_CERT_ID" \
+  /etc/httpd/conf/ssl/apache-cert-lab.crt \
+  /etc/httpd/conf/ssl/apache-cert-lab.key \
+  /etc/httpd/conf/ssl/apache-cert-lab-chain.crt
+if [ -f /etc/httpd/conf/ssl/apache-cert-lab.crt ]; then
+  install -m 0644 /etc/httpd/conf/ssl/apache-cert-lab.crt /etc/apache2/ssl/apache-cert-lab.crt
+  install -m 0600 /etc/httpd/conf/ssl/apache-cert-lab.key /etc/apache2/ssl/apache-cert-lab.key
+fi
+
+# Java / Spring Boot scenario: PEM plus PKCS#12 plus JKS
+place_certificate "$JAVA_CERT_ID" \
+  /opt/application/certs/application.pem \
+  /opt/application/certs/application.key
+
+# Expired scenario: the classic "forgotten certificate" locations
+place_certificate "$EXPIRED_CERT_ID" \
+  /etc/ssl/certs/legacy-cert-lab.crt \
+  /etc/ssl/private/legacy-cert-lab.key
+if [ -n "$EXPIRED_CERT_ID" ] && [ -f "$STAGE/$EXPIRED_CERT_ID/cert.pem" ]; then
+  install -m 0644 "$STAGE/$EXPIRED_CERT_ID/cert.pem" /opt/certificates/legacy-cert-lab.pem
+  install -m 0644 "$STAGE/$EXPIRED_CERT_ID/cert.pem" /opt/certificates/legacy-cert-lab.crt
+  if [ -f "$STAGE/$EXPIRED_CERT_ID/chain.pem" ]; then
+    install -m 0644 "$STAGE/$EXPIRED_CERT_ID/chain.pem" /opt/certificates/legacy-cert-lab-chain.pem
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. PKCS#12 and JKS keystores for the Java scenario
+#    keytool ships with the JDK, so the JKS is built HERE rather than on the
+#    machine running Terraform - that removes any local Java dependency.
+# ---------------------------------------------------------------------------
+if [ -f /opt/application/certs/application.pem ]; then
+  echo "--- building PKCS#12 and JKS keystores"
+
+  openssl pkcs12 -export \
+    -inkey /opt/application/certs/application.key \
+    -in /opt/application/certs/application.pem \
+    -name "$JAVA_CERT_ID" \
+    -macalg sha256 \
+    -out /opt/application/certs/keystore.p12 \
+    -passout "pass:$KEYSTORE_PASSWORD"
+  cp /opt/application/certs/keystore.p12 /opt/application/certs/keystore.pfx
+
+  keytool -importkeystore -noprompt \
+    -srckeystore /opt/application/certs/keystore.p12 -srcstoretype PKCS12 \
+    -srcstorepass "$KEYSTORE_PASSWORD" \
+    -destkeystore /opt/application/certs/keystore.jks -deststoretype JKS \
+    -deststorepass "$KEYSTORE_PASSWORD"
+
+  # A truststore as well - scanners commonly find both next to each other.
+  keytool -importcert -noprompt -alias "$JAVA_CERT_ID" \
+    -file /opt/application/certs/application.pem \
+    -keystore /opt/application/certs/truststore.jks \
+    -storepass "$KEYSTORE_PASSWORD" -storetype JKS
+
+  chmod 0640 /opt/application/certs/keystore.p12 \
+             /opt/application/certs/keystore.pfx \
+             /opt/application/certs/keystore.jks \
+             /opt/application/certs/truststore.jks
+
+  # Realistic Spring Boot TLS configuration pointing at the keystore. The
+  # application itself is intentionally NOT installed - the objective is
+  # certificate discovery, not running a Java service.
+  cat > /opt/application/config/application.properties <<'PROPS'
+server.port=8443
+server.ssl.enabled=true
+server.ssl.key-store=/opt/application/certs/keystore.p12
+server.ssl.key-store-type=PKCS12
+server.ssl.key-store-password=${keystore_password}
+server.ssl.trust-store=/opt/application/certs/truststore.jks
+server.ssl.trust-store-type=JKS
+server.ssl.trust-store-password=${keystore_password}
+PROPS
+  chmod 0640 /opt/application/config/application.properties
+fi
+
+# ---------------------------------------------------------------------------
+# 6. nginx on 443 using the nginx scenario certificate
+# ---------------------------------------------------------------------------
+if [ -f /etc/nginx/ssl/nginx-cert-lab.pem ]; then
+  echo "--- configuring nginx TLS"
+  cat > /etc/nginx/conf.d/certificate-lab.conf <<'NGINX'
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/ssl/nginx-cert-lab.pem;
+    ssl_certificate_key /etc/nginx/ssl/nginx-cert-lab.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    location / {
+        return 200 "certificate-test-lab nginx\n";
+        add_header Content-Type text/plain;
+    }
+}
+NGINX
+  nginx -t && systemctl enable --now nginx
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Apache on 8443 using the Apache scenario certificate
+#    The distro ssl.conf is moved aside so it does not fight nginx for 443.
+# ---------------------------------------------------------------------------
+if [ -f /etc/httpd/conf/ssl/apache-cert-lab.crt ]; then
+  echo "--- configuring Apache TLS on 8443"
+  [ -f /etc/httpd/conf.d/ssl.conf ] && mv /etc/httpd/conf.d/ssl.conf /etc/httpd/conf.d/ssl.conf.disabled
+
+  cat > /etc/httpd/conf.d/certificate-lab-ssl.conf <<'APACHE'
+Listen 8443 https
+<VirtualHost *:8443>
+    SSLEngine on
+    SSLCertificateFile      /etc/httpd/conf/ssl/apache-cert-lab.crt
+    SSLCertificateKeyFile   /etc/httpd/conf/ssl/apache-cert-lab.key
+    SSLProtocol             -all +TLSv1.2 +TLSv1.3
+    DocumentRoot            /var/www/html
+</VirtualHost>
+APACHE
+  echo "certificate-test-lab apache" > /var/www/html/index.html
+  apachectl configtest && systemctl enable --now httpd
+fi
+
+# ---------------------------------------------------------------------------
+# 8. Machine-readable expected-answer manifest for the scanner
+# ---------------------------------------------------------------------------
+cat > /opt/certificates/certificate-inventory.json <<'INVENTORY'
+${filesystem_inventory_json}
+INVENTORY
+chmod 0644 /opt/certificates/certificate-inventory.json
+
+# A convenience scanner the Java backend can invoke via SSM Run Command.
+cat > /usr/local/bin/certificate-lab-scan <<'SCAN'
+#!/bin/bash
+# Walks the lab certificate directories and prints one JSON object per
+# certificate found. Intended to be driven by ssm:SendCommand with the
+# AWS-RunShellScript document.
+set -uo pipefail
+for dir in /etc/ssl/certs /etc/ssl/private /etc/nginx/ssl /etc/apache2/ssl \
+           /etc/httpd/conf/ssl /opt/certificates /opt/application/certs; do
+  [ -d "$dir" ] || continue
+  while IFS= read -r -d '' file; do
+    subject=$(openssl x509 -in "$file" -noout -subject 2>/dev/null) || continue
+    not_after=$(openssl x509 -in "$file" -noout -enddate 2>/dev/null | cut -d= -f2)
+    issuer=$(openssl x509 -in "$file" -noout -issuer 2>/dev/null)
+    sans=$(openssl x509 -in "$file" -noout -ext subjectAltName 2>/dev/null | tail -n +2 | tr -d ' \n')
+    fingerprint=$(openssl x509 -in "$file" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+    printf '{"path":"%s","subject":"%s","issuer":"%s","sans":"%s","notAfter":"%s","sha256":"%s"}\n' \
+      "$file" "$${subject#subject=}" "$${issuer#issuer=}" "$sans" "$not_after" "$fingerprint"
+  done < <(find "$dir" -maxdepth 2 -type f \( -name '*.pem' -o -name '*.crt' -o -name '*.cer' \) -print0)
+done
+for store in /opt/application/certs/keystore.jks /opt/application/certs/truststore.jks \
+             /opt/application/certs/keystore.p12 /opt/application/certs/keystore.pfx; do
+  [ -f "$store" ] && printf '{"path":"%s","type":"keystore","note":"password required to enumerate"}\n' "$store"
+done
+SCAN
+chmod 0755 /usr/local/bin/certificate-lab-scan
+
+date -u +%FT%TZ > /opt/certificates/BOOTSTRAP_COMPLETE
+echo "=== certificate-test-lab bootstrap complete ==="
