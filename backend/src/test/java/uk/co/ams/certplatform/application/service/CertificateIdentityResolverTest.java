@@ -21,37 +21,33 @@ class CertificateIdentityResolverTest {
 
     @Test
     void shouldDeduplicateCertificatesWithSameFingerprint() {
-        Certificate cert1 = new Certificate();
-        cert1.setFingerprint("AA:BB:CC");
-        cert1.setDomain("example.com");
-        CertificateUsage usage1 = new CertificateUsage();
-        usage1.setService("ACM");
-        cert1.addUsage(usage1);
+        Certificate cert1 = Certificate.builder()
+                .fingerprint("AA:BB:CC")
+                .domain("example.com")
+                .usage(CertificateUsage.builder().service("ACM").build())
+                .build();
 
-        Certificate cert2 = new Certificate();
-        cert2.setFingerprint("AA:BB:CC");
-        cert2.setDomain("example.com");
-        CertificateUsage usage2 = new CertificateUsage();
-        usage2.setService("ALB");
-        cert2.addUsage(usage2);
+        Certificate cert2 = Certificate.builder()
+                .fingerprint("AA:BB:CC")
+                .domain("example.com")
+                .usage(CertificateUsage.builder().service("ALB").build())
+                .build();
 
         List<Certificate> resolved = resolver.resolve(Arrays.asList(cert1, cert2));
 
         assertEquals(1, resolved.size());
-        assertEquals("AA:BB:CC", resolved.get(0).getFingerprint());
-        assertEquals(2, resolved.get(0).getUsages().size());
-        assertTrue(resolved.get(0).getUsages().stream().anyMatch(u -> "ACM".equals(u.getService())));
-        assertTrue(resolved.get(0).getUsages().stream().anyMatch(u -> "ALB".equals(u.getService())));
+        assertEquals("AA:BB:CC", resolved.get(0).fingerprint());
+        assertEquals(2, resolved.get(0).usages().size());
+        assertTrue(resolved.get(0).usages().stream().anyMatch(u -> "ACM".equals(u.service())));
+        assertTrue(resolved.get(0).usages().stream().anyMatch(u -> "ALB".equals(u.service())));
     }
     
     @Test
     void shouldNotDeduplicateCertificatesWithDifferentFingerprints() {
-        Certificate cert1 = new Certificate();
-        cert1.setFingerprint("AA:BB:CC");
-        
-        Certificate cert2 = new Certificate();
-        cert2.setFingerprint("DD:EE:FF");
-        
+        Certificate cert1 = Certificate.builder().fingerprint("AA:BB:CC").build();
+        Certificate cert2 = Certificate.builder().fingerprint("DD:EE:FF").build();
+
+
         List<Certificate> resolved = resolver.resolve(Arrays.asList(cert1, cert2));
 
         assertEquals(2, resolved.size());

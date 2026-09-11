@@ -55,7 +55,7 @@ public class AwsAcmDiscoveryStrategy extends AbstractAwsDiscoveryStrategy {
     }
 
     @Override
-    protected void discoverLive(ScanContext context, DiscoveryResult result) {
+    protected void discoverLive(ScanContext context, DiscoveryResult.Accumulator result) {
         String region = effectiveRegion(context);
         int found = 0;
 
@@ -83,7 +83,7 @@ public class AwsAcmDiscoveryStrategy extends AbstractAwsDiscoveryStrategy {
         // The ARN-to-certificate mapping lives in the resolver so that the load
         // balancer and CloudFront strategies produce identical records for the
         // same certificate and the deduplicator can merge them.
-        Certificate certificate = resolver.fromAcmDetail(detail, context.getAccount(), region);
+        Certificate certificate = resolver.fromAcmDetail(detail, context.account(), region);
 
         if (detail.hasInUseBy() && !detail.inUseBy().isEmpty()) {
             // ACM knows every resource serving this certificate - ELB, CloudFront,
@@ -91,13 +91,13 @@ public class AwsAcmDiscoveryStrategy extends AbstractAwsDiscoveryStrategy {
             // each of those services in turn.
             for (String resourceArn : detail.inUseBy()) {
                 CertificateUsage usage = usage(context, AwsArns.serviceOf(resourceArn), resourceArn,
-                        AwsArns.serviceOf(resourceArn), "ATTACHED");
-                usage.setRegion(AwsArns.regionOf(resourceArn) != null ? AwsArns.regionOf(resourceArn) : region);
-                certificate.addUsage(usage);
+                        AwsArns.serviceOf(resourceArn), "ATTACHED")
+                        .withRegion(AwsArns.regionOf(resourceArn) != null ? AwsArns.regionOf(resourceArn) : region);
+                certificate = certificate.withUsage(usage);
             }
-        } else {
-            certificate.addUsage(usage(context, "ACM", detail.certificateArn(), "Certificate", "UNATTACHED"));
+            return certificate;
         }
-        return certificate;
+        return certificate.withUsage(
+                usage(context, "ACM", detail.certificateArn(), "Certificate", "UNATTACHED"));
     }
 }

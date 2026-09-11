@@ -26,14 +26,14 @@ public class AzureCloudProviderAdapter implements CloudProviderAdapter {
         // Only AWS has a live implementation so far. Say so rather than reporting a
         // simulated success against what the operator believes is a real account.
         if (properties.isReal(CloudProviderType.AZURE)) {
-            return new ConnectionTestResult("FAILED", CloudProviderType.AZURE, account.getAccountId(),
+            return ConnectionTestResult.failed(CloudProviderType.AZURE, account.accountId(),
                     "REAL mode is not implemented for AZURE yet; only AWS can be verified live.");
         }
-        if (account.getToken() != null && !account.getToken().isBlank()) {
-             return new ConnectionTestResult("CONNECTED", CloudProviderType.AZURE, account.getAccountId(),
+        if (account.token() != null && !account.token().isBlank()) {
+             return ConnectionTestResult.connected(CloudProviderType.AZURE, account.accountId(),
                      "Connection successful (simulated - provider mode is MOCK)");
         }
-        return new ConnectionTestResult("FAILED", CloudProviderType.AZURE, account.getAccountId(), "Unable to authenticate with cloud provider");
+        return ConnectionTestResult.failed(CloudProviderType.AZURE, account.accountId(), "Unable to authenticate with cloud provider");
     }
 
 }

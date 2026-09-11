@@ -45,12 +45,12 @@ public class OrganisationRepositoryAdapter implements OrganisationRepositoryPort
     private OrganisationEntity toEntity(Organisation domain) {
         if (domain == null) return null;
         OrganisationEntity entity = new OrganisationEntity();
-        entity.setId(domain.getId());
-        entity.setName(domain.getName());
-        entity.setDescription(domain.getDescription());
-        entity.setStatus(domain.getStatus());
-        entity.setCreatedAt(domain.getCreatedAt());
-        entity.setUpdatedAt(domain.getUpdatedAt());
+        entity.setId(domain.id());
+        entity.setName(domain.name());
+        entity.setDescription(domain.description());
+        entity.setStatus(domain.status());
+        entity.setCreatedAt(domain.createdAt());
+        entity.setUpdatedAt(domain.updatedAt());
         return entity;
     }
 

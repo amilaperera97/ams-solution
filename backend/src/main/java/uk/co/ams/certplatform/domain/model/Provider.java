@@ -1,48 +1,65 @@
 package uk.co.ams.certplatform.domain.model;
 
 import uk.co.ams.certplatform.domain.enums.CloudProviderType;
+
 import java.time.Instant;
 
-public class Provider {
-    private String id;
-    private String name;
-    private String organisationId;
-    private CloudProviderType type;
-    private String status;
-    private Instant createdAt;
-    private Instant updatedAt;
+/** One cloud (AWS, Azure, GCP) registered against an organisation. */
+public record Provider(
+        String id,
+        String name,
+        String organisationId,
+        CloudProviderType type,
+        String status,
+        Instant createdAt,
+        Instant updatedAt
+) {
 
-    public Provider() {
+    public Provider withId(String id) {
+        return toBuilder().id(id).build();
     }
 
-    public Provider(String id, String name, String organisationId, CloudProviderType type, String status, Instant createdAt, Instant updatedAt) {
-        this.id = id;
-        this.name = name;
-        this.organisationId = organisationId;
-        this.type = type;
-        this.status = status;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+    public Provider withStatus(String status) {
+        return toBuilder().status(status).build();
     }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public static Builder builder() {
+        return new Builder();
+    }
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    /** Starting point for a modified copy - the stand-in for the setters this used to have. */
+    public Builder toBuilder() {
+        return new Builder()
+                .id(id)
+                .name(name)
+                .organisationId(organisationId)
+                .type(type)
+                .status(status)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt);
+    }
 
-    public String getOrganisationId() { return organisationId; }
-    public void setOrganisationId(String organisationId) { this.organisationId = organisationId; }
+    public static final class Builder {
+        private String id;
+        private String name;
+        private String organisationId;
+        private CloudProviderType type;
+        private String status;
+        private Instant createdAt;
+        private Instant updatedAt;
 
-    public CloudProviderType getType() { return type; }
-    public void setType(CloudProviderType type) { this.type = type; }
+        private Builder() {}
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+        public Builder id(String id) { this.id = id; return this; }
+        public Builder name(String name) { this.name = name; return this; }
+        public Builder organisationId(String organisationId) { this.organisationId = organisationId; return this; }
+        public Builder type(CloudProviderType type) { this.type = type; return this; }
+        public Builder status(String status) { this.status = status; return this; }
+        public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+        public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
 
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+        public Provider build() {
+            return new Provider(id, name, organisationId, type, status, createdAt, updatedAt);
+        }
+    }
 }

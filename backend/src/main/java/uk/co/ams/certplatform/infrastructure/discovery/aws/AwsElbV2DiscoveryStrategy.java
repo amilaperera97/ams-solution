@@ -55,7 +55,7 @@ public abstract class AwsElbV2DiscoveryStrategy extends AbstractAwsDiscoveryStra
     protected abstract LoadBalancerTypeEnum loadBalancerType();
 
     @Override
-    protected void discoverLive(ScanContext context, DiscoveryResult result) {
+    protected void discoverLive(ScanContext context, DiscoveryResult.Accumulator result) {
         String region = effectiveRegion(context);
         // One certificate can front several listeners; merge usages as we go so the
         // result holds one record per certificate rather than one per attachment.
@@ -98,21 +98,25 @@ public abstract class AwsElbV2DiscoveryStrategy extends AbstractAwsDiscoveryStra
                         resolver.resolve(context, arn)
                                 .orElseGet(() -> resolver.unresolved(context, arn, descriptor().key())));
 
+                // The usage helper already stamps the effective region, which is `region`.
                 CertificateUsage usage = usage(context, descriptor().key(), loadBalancer.loadBalancerArn(),
                         descriptor().label(), "ATTACHED");
-                usage.setRegion(region);
-                certificate.addUsage(usage);
 
                 // Attribute the load balancer's tags to the certificate so estate
                 // filters ("everything owned by team X") work on discovered certs.
-                loadBalancerTags.forEach(certificate::addTag);
-                certificate.addTag(new ResourceTag("elb:loadBalancerName", loadBalancer.loadBalancerName()));
-                certificate.addTag(new ResourceTag("elb:listener",
-                        listener.protocolAsString() + ":" + listener.port()));
+                List<ResourceTag> tags = new ArrayList<>(loadBalancerTags);
+                tags.add(new ResourceTag("elb:loadBalancerName", loadBalancer.loadBalancerName()));
+                tags.add(new ResourceTag("elb:listener", listener.protocolAsString() + ":" + listener.port()));
                 if (listener.sslPolicy() != null) {
-                    certificate.addTag(new ResourceTag("elb:sslPolicy", listener.sslPolicy()));
+                    tags.add(new ResourceTag("elb:sslPolicy", listener.sslPolicy()));
                 }
-                if (certificate.getResource() == null) certificate.setResource(certificateArn);
+
+                byArn.put(certificateArn, certificate
+                        .withUsage(usage)
+                        .withTags(tags)
+                        .toBuilder()
+                        .resource(certificate.resource() != null ? certificate.resource() : certificateArn)
+                        .build());
             }
         }
     }

@@ -30,7 +30,7 @@ public abstract class AbstractDiscoveryStrategy implements CertificateDiscoveryS
 
     @Override
     public final DiscoveryResult discover(ScanContext context) {
-        DiscoveryResult result = newResult(context);
+        DiscoveryResult.Accumulator result = newResult(context);
 
         if (!descriptor().implemented()) {
             return result.notImplemented(descriptor().label()
@@ -41,9 +41,9 @@ public abstract class AbstractDiscoveryStrategy implements CertificateDiscoveryS
             try {
                 simulate(context, result);
             } catch (Exception e) {
-                result.failed("Simulation failed: " + rootMessage(e));
+                return result.failed("Simulation failed: " + rootMessage(e));
             }
-            return result;
+            return result.build();
         }
 
         try {
@@ -52,42 +52,42 @@ public abstract class AbstractDiscoveryStrategy implements CertificateDiscoveryS
             // REAL mode must report the failure, never fall back to invented data.
             handleLiveFailure(context, result, e);
         }
-        return result;
+        return result.build();
     }
 
     /**
      * Read the live service and add whatever is found to {@code result}. Set a
-     * terminal state with {@link DiscoveryResult#settle} (or one of the explicit
-     * helpers); if nothing is set, the result stays SUCCESS.
+     * terminal state with {@link DiscoveryResult.Accumulator#settle} (or one of the
+     * explicit helpers); if nothing is set, the result stays SUCCESS.
      */
-    protected abstract void discoverLive(ScanContext context, DiscoveryResult result) throws Exception;
+    protected abstract void discoverLive(ScanContext context, DiscoveryResult.Accumulator result) throws Exception;
 
     /**
      * MOCK-mode behaviour. The default produces one plausible certificate for the
      * service so the UI and the whole pipeline can be exercised without a cloud
      * account; override when a service needs a more specific shape.
      */
-    protected void simulate(ScanContext context, DiscoveryResult result) {
+    protected void simulate(ScanContext context, DiscoveryResult.Accumulator result) {
         result.addCertificate(simulator.certificateFor(context, descriptor()));
         result.succeeded("Simulated 1 certificate for " + descriptor().label() + " (provider mode is MOCK)");
     }
 
     /** Maps a failure onto a status. Subclasses refine this per provider SDK. */
-    protected void handleLiveFailure(ScanContext context, DiscoveryResult result, Exception e) {
+    protected void handleLiveFailure(ScanContext context, DiscoveryResult.Accumulator result, Exception e) {
         log.warn("{} discovery failed for account {} in {}: {}",
-                descriptor().key(), context.getAccount().getId(), result.getRegion(), e.getMessage());
+                descriptor().key(), context.accountId(), result.region(), e.getMessage());
         result.failed(rootMessage(e));
     }
 
     /** Region the strategy actually talked to; subclasses resolve defaults here. */
     protected String effectiveRegion(ScanContext context) {
-        return context.getRegion();
+        return context.region();
     }
 
-    protected DiscoveryResult newResult(ScanContext context) {
-        return new DiscoveryResult(
+    protected DiscoveryResult.Accumulator newResult(ScanContext context) {
+        return DiscoveryResult.accumulator(
                 descriptor().provider().name(),
-                context.getAccount() != null ? context.getAccount().getId() : null,
+                context.accountId(),
                 effectiveRegion(context),
                 descriptor().key());
     }

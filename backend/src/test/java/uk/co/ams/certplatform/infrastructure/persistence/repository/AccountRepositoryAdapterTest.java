@@ -38,14 +38,14 @@ class AccountRepositoryAdapterTest {
     }
 
     private Account accessKeyAccount() {
-        Account account = new Account();
-        account.setId("acc-1");
-        account.setAuthType(AccountAuthType.ACCESS_KEY);
-        account.setAccountId("123456789012");
-        account.setAccessKeyId("AKIAIOSFODNN7EXAMPLE");
-        account.setSecretAccessKey("wJalrXUtnFEMI/K7MDENG");
-        account.setRegion("eu-west-2");
-        return account;
+        return Account.builder()
+                .id("acc-1")
+                .authType(AccountAuthType.ACCESS_KEY)
+                .accountId("123456789012")
+                .accessKeyId("AKIAIOSFODNN7EXAMPLE")
+                .secretAccessKey("wJalrXUtnFEMI/K7MDENG")
+                .region("eu-west-2")
+                .build();
     }
 
     @Test
@@ -70,10 +70,11 @@ class AccountRepositoryAdapterTest {
     @Test
     void shouldEncryptTokensToo() {
         when(jpaRepository.save(any(AccountEntity.class))).thenAnswer(i -> i.getArgument(0));
-        Account account = accessKeyAccount();
-        account.setAuthType(AccountAuthType.TOKEN);
-        account.setSecretAccessKey(null);
-        account.setToken("a-bearer-token");
+        Account account = accessKeyAccount().toBuilder()
+                .authType(AccountAuthType.TOKEN)
+                .secretAccessKey(null)
+                .token("a-bearer-token")
+                .build();
 
         adapter.save(account);
 
@@ -87,14 +88,14 @@ class AccountRepositoryAdapterTest {
         when(jpaRepository.save(any(AccountEntity.class))).thenAnswer(i -> i.getArgument(0));
         Account saved = adapter.save(accessKeyAccount());
 
-        assertEquals("wJalrXUtnFEMI/K7MDENG", saved.getSecretAccessKey(),
+        assertEquals("wJalrXUtnFEMI/K7MDENG", saved.secretAccessKey(),
                 "callers get plaintext back so the SDK can sign with it");
 
         ArgumentCaptor<AccountEntity> captor = ArgumentCaptor.forClass(AccountEntity.class);
         verify(jpaRepository).save(captor.capture());
         when(jpaRepository.findById("acc-1")).thenReturn(Optional.of(captor.getValue()));
 
-        assertEquals("wJalrXUtnFEMI/K7MDENG", adapter.findById("acc-1").orElseThrow().getSecretAccessKey());
+        assertEquals("wJalrXUtnFEMI/K7MDENG", adapter.findById("acc-1").orElseThrow().secretAccessKey());
     }
 
     @Test
@@ -107,6 +108,6 @@ class AccountRepositoryAdapterTest {
         when(jpaRepository.findById("acc-legacy")).thenReturn(Optional.of(legacy));
 
         assertEquals("plaintext-from-an-older-build",
-                adapter.findById("acc-legacy").orElseThrow().getSecretAccessKey());
+                adapter.findById("acc-legacy").orElseThrow().secretAccessKey());
     }
 }

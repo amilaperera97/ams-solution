@@ -96,8 +96,8 @@ public class DiscoveryTaskPlanner {
                 }
             }
         }
-        if (regions.isEmpty() && account.getRegion() != null && !account.getRegion().isBlank()) {
-            regions.add(account.getRegion());
+        if (regions.isEmpty() && account.region() != null && !account.region().isBlank()) {
+            regions.add(account.region());
         }
         if (regions.isEmpty()) {
             // The client factory substitutes the configured default for a null region.

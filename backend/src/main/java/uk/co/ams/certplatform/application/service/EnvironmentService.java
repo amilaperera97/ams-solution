@@ -26,15 +26,17 @@ public class EnvironmentService {
         Provider provider = providerRepositoryPort.findById(providerId)
             .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + providerId));
 
-        Environment environment = new Environment();
-        environment.setId("env-" + UUID.randomUUID().toString());
-        environment.setOrganisationId(provider.getOrganisationId());
-        environment.setProviderId(providerId);
-        environment.setName(name);
-        environment.setDescription(description);
-        environment.setStatus("ACTIVE");
-        environment.setCreatedAt(Instant.now());
-        environment.setUpdatedAt(Instant.now());
+        Instant now = Instant.now();
+        Environment environment = Environment.builder()
+                .id("env-" + UUID.randomUUID())
+                .organisationId(provider.organisationId())
+                .providerId(providerId)
+                .name(name)
+                .description(description)
+                .status("ACTIVE")
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
 
         return environmentRepositoryPort.save(environment);
     }

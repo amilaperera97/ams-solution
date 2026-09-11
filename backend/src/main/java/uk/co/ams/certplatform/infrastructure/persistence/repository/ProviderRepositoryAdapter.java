@@ -50,13 +50,13 @@ public class ProviderRepositoryAdapter implements ProviderRepositoryPort {
     private ProviderEntity toEntity(Provider domain) {
         if (domain == null) return null;
         ProviderEntity entity = new ProviderEntity();
-        entity.setId(domain.getId());
-        entity.setName(domain.getName());
-        entity.setOrganisationId(domain.getOrganisationId());
-        entity.setType(domain.getType());
-        entity.setStatus(domain.getStatus());
-        entity.setCreatedAt(domain.getCreatedAt());
-        entity.setUpdatedAt(domain.getUpdatedAt());
+        entity.setId(domain.id());
+        entity.setName(domain.name());
+        entity.setOrganisationId(domain.organisationId());
+        entity.setType(domain.type());
+        entity.setStatus(domain.status());
+        entity.setCreatedAt(domain.createdAt());
+        entity.setUpdatedAt(domain.updatedAt());
         return entity;
     }
 

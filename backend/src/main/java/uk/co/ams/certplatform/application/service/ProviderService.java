@@ -26,14 +26,16 @@ public class ProviderService {
         organisationRepositoryPort.findById(organisationId)
             .orElseThrow(() -> new IllegalArgumentException("Organisation not found: " + organisationId));
 
-        Provider provider = new Provider();
-        provider.setId("prov-" + UUID.randomUUID().toString());
-        provider.setName(name);
-        provider.setOrganisationId(organisationId);
-        provider.setType(type);
-        provider.setStatus("PENDING"); // Using PENDING as per your previous example, but it can be ACTIVE
-        provider.setCreatedAt(Instant.now());
-        provider.setUpdatedAt(Instant.now());
+        Instant now = Instant.now();
+        Provider provider = Provider.builder()
+                .id("prov-" + UUID.randomUUID())
+                .name(name)
+                .organisationId(organisationId)
+                .type(type)
+                .status("PENDING") // Using PENDING as per your previous example, but it can be ACTIVE
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
 
         return providerRepositoryPort.save(provider);
     }

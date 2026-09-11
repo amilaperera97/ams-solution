@@ -38,18 +38,18 @@ public class CertificateController {
         csv.append("ID,Domain,Provider,AccountID,Environment,Region,Status,IssuedDate,ExpiryDate,Issuer,Algorithm,AutoRenewal\n");
         
         for (Certificate cert : certificates) {
-            csv.append(cert.getId()).append(",")
-               .append(cert.getDomain()).append(",")
-               .append(cert.getProvider()).append(",")
-               .append(cert.getAccountId()).append(",")
-               .append(cert.getEnvironment()).append(",")
-               .append(cert.getRegion()).append(",")
-               .append(cert.getStatus()).append(",")
-               .append(cert.getIssuedDate()).append(",")
-               .append(cert.getExpiryDate()).append(",")
-               .append(cert.getIssuer()).append(",")
-               .append(cert.getAlgorithm()).append(",")
-               .append(cert.getAutoRenewal()).append("\n");
+            csv.append(cert.id()).append(",")
+               .append(cert.domain()).append(",")
+               .append(cert.provider()).append(",")
+               .append(cert.accountId()).append(",")
+               .append(cert.environment()).append(",")
+               .append(cert.region()).append(",")
+               .append(cert.status()).append(",")
+               .append(cert.issuedDate()).append(",")
+               .append(cert.expiryDate()).append(",")
+               .append(cert.issuer()).append(",")
+               .append(cert.algorithm()).append(",")
+               .append(cert.autoRenewal()).append("\n");
         }
         
         return ResponseEntity.ok()

@@ -51,7 +51,7 @@ public class AwsEc2FilesystemDiscoveryStrategy extends AbstractAwsDiscoveryStrat
     }
 
     @Override
-    protected void discoverLive(ScanContext context, DiscoveryResult result) {
+    protected void discoverLive(ScanContext context, DiscoveryResult.Accumulator result) {
         scanner.scan(context, result, descriptor().key(), "EC2 instance");
     }
 }

@@ -89,16 +89,16 @@ public class DefaultScanExecutor implements ScanExecutor {
         }
 
         try {
-            scan.transitionTo(ScanState.RUNNING);
+            scan = scan.transitionTo(ScanState.RUNNING);
             scanRepositoryPort.save(scan);
 
             List<DiscoveryTaskPlanner.AccountTarget> targets = resolveTargets(scan);
-            scan.setAccountsTotal(targets.size());
+            scan = scan.withAccountsTotal(targets.size());
             scanRepositoryPort.save(scan);
 
             Map<String, String> environmentByAccount = environmentNamesOf(targets);
 
-            DiscoveryTaskPlanner.Plan plan = planner.plan(targets, scan.getRegions(), scan.getServices());
+            DiscoveryTaskPlanner.Plan plan = planner.plan(targets, scan.regions(), scan.services());
             log.info("Scan {}: {} account(s) -> {} discovery task(s){}", scanId, targets.size(),
                     plan.tasks().size(),
                     plan.unknownServices().isEmpty() ? "" : "; unknown services " + plan.unknownServices());
@@ -123,7 +123,7 @@ public class DefaultScanExecutor implements ScanExecutor {
     private List<DiscoveryTaskPlanner.AccountTarget> resolveTargets(Scan scan) {
         Map<String, Account> accountsById = new LinkedHashMap<>();
         for (Account account : resolveAccounts(scan)) {
-            if (account.getId() != null) accountsById.putIfAbsent(account.getId(), account);
+            if (account.id() != null) accountsById.putIfAbsent(account.id(), account);
         }
 
         Map<String, CloudProviderType> providerCache = new LinkedHashMap<>();
@@ -135,47 +135,47 @@ public class DefaultScanExecutor implements ScanExecutor {
     }
 
     private List<Account> resolveAccounts(Scan scan) {
-        ScanScopeType scope = scan.getScopeType();
+        ScanScopeType scope = scan.scopeType();
         List<Account> accounts = new ArrayList<>();
 
-        if (scope == ScanScopeType.ACCOUNT && scan.getAccountIds() != null) {
-            for (String accountId : scan.getAccountIds()) {
+        if (scope == ScanScopeType.ACCOUNT && scan.accountIds() != null) {
+            for (String accountId : scan.accountIds()) {
                 accountRepositoryPort.findById(accountId).ifPresent(accounts::add);
             }
             return accounts;
         }
 
-        if (scope == ScanScopeType.ENVIRONMENT && scan.getEnvironmentIds() != null) {
-            for (String environmentId : scan.getEnvironmentIds()) {
+        if (scope == ScanScopeType.ENVIRONMENT && scan.environmentIds() != null) {
+            for (String environmentId : scan.environmentIds()) {
                 accounts.addAll(accountRepositoryPort.findByEnvironmentId(environmentId));
             }
             return accounts;
         }
 
-        if (scope == ScanScopeType.PROVIDER && scan.getProviderIds() != null) {
-            for (String providerId : scan.getProviderIds()) {
+        if (scope == ScanScopeType.PROVIDER && scan.providerIds() != null) {
+            for (String providerId : scan.providerIds()) {
                 for (Environment environment : environmentRepositoryPort.findByProviderId(providerId)) {
-                    accounts.addAll(accountRepositoryPort.findByEnvironmentId(environment.getId()));
+                    accounts.addAll(accountRepositoryPort.findByEnvironmentId(environment.id()));
                 }
             }
             return accounts;
         }
 
         // CUSTOM: union of everything named, at whichever level it was named.
-        if (scan.getProviderIds() != null) {
-            for (String providerId : scan.getProviderIds()) {
+        if (scan.providerIds() != null) {
+            for (String providerId : scan.providerIds()) {
                 for (Environment environment : environmentRepositoryPort.findByProviderId(providerId)) {
-                    accounts.addAll(accountRepositoryPort.findByEnvironmentId(environment.getId()));
+                    accounts.addAll(accountRepositoryPort.findByEnvironmentId(environment.id()));
                 }
             }
         }
-        if (scan.getEnvironmentIds() != null) {
-            for (String environmentId : scan.getEnvironmentIds()) {
+        if (scan.environmentIds() != null) {
+            for (String environmentId : scan.environmentIds()) {
                 accounts.addAll(accountRepositoryPort.findByEnvironmentId(environmentId));
             }
         }
-        if (scan.getAccountIds() != null) {
-            for (String accountId : scan.getAccountIds()) {
+        if (scan.accountIds() != null) {
+            for (String accountId : scan.accountIds()) {
                 accountRepositoryPort.findById(accountId).ifPresent(accounts::add);
             }
         }
@@ -193,20 +193,20 @@ public class DefaultScanExecutor implements ScanExecutor {
         Map<String, String> byEnvironmentId = new LinkedHashMap<>();
         for (DiscoveryTaskPlanner.AccountTarget target : targets) {
             Account account = target.account();
-            String environmentId = account.getEnvironmentId();
+            String environmentId = account.environmentId();
             if (environmentId == null) continue;
             String name = byEnvironmentId.computeIfAbsent(environmentId,
-                    id -> environmentRepositoryPort.findById(id).map(Environment::getName).orElse(id));
-            byAccountId.put(account.getId(), name);
+                    id -> environmentRepositoryPort.findById(id).map(Environment::name).orElse(id));
+            byAccountId.put(account.id(), name);
         }
         return byAccountId;
     }
 
     private CloudProviderType providerTypeOf(Account account, Map<String, CloudProviderType> cache) {
-        String providerId = account.getProviderId();
+        String providerId = account.providerId();
         if (providerId == null) return CloudProviderType.AWS;
         return cache.computeIfAbsent(providerId, id -> providerRepositoryPort.findById(id)
-                .map(Provider::getType)
+                .map(Provider::type)
                 .orElse(CloudProviderType.AWS));
     }
 
@@ -221,7 +221,7 @@ public class DefaultScanExecutor implements ScanExecutor {
         List<CompletableFuture<DiscoveryResult>> futures = new ArrayList<>(tasks.size());
         for (DiscoveryTask task : tasks) {
             Semaphore accountGate = perAccount.computeIfAbsent(
-                    String.valueOf(task.account().getId()), id -> new Semaphore(perAccountLimit));
+                    String.valueOf(task.account().id()), id -> new Semaphore(perAccountLimit));
             futures.add(CompletableFuture.supplyAsync(
                     () -> runOne(scanId, task, options, accountGate), executorService));
         }
@@ -267,7 +267,7 @@ public class DefaultScanExecutor implements ScanExecutor {
             globalHeld = true;
             accountGate.acquire();
             accountHeld = true;
-            rateLimiters.forAccount(task.account().getId()).acquire();
+            rateLimiters.forAccount(task.account().id()).acquire();
 
             ScanContext context = ScanContext.forTask(scanId, task, options);
             DiscoveryResult result = strategy.get().discover(context);
@@ -297,8 +297,8 @@ public class DefaultScanExecutor implements ScanExecutor {
         AtomicInteger successes = new AtomicInteger();
 
         for (DiscoveryResult result : results) {
-            accountsWithOutcome.add(String.valueOf(result.getAccountId()));
-            DiscoveryStatus status = result.getStatus();
+            accountsWithOutcome.add(String.valueOf(result.accountId()));
+            DiscoveryStatus status = result.status();
             if (status.isFailure()) {
                 failures.incrementAndGet();
             } else if (status.ran()) {
@@ -306,56 +306,65 @@ public class DefaultScanExecutor implements ScanExecutor {
             }
             // PARTIAL still carries certificates, so collect from anything that ran.
             if (!status.isFailure()) {
-                discovered.addAll(result.getCertificates());
+                discovered.addAll(result.certificates());
             }
         }
 
         List<Certificate> canonical = identityResolver.resolve(discovered);
         int persisted = 0;
         for (Certificate certificate : canonical) {
-            certificate.setScanId(scan.getId());
-            if (certificate.getEnvironment() == null) {
-                certificate.setEnvironment(environmentByAccount.getOrDefault(certificate.getAccountId(), "unassigned"));
-            }
             try {
-                certificateRepositoryPort.save(certificate);
+                certificateRepositoryPort.save(stamp(certificate, scan, environmentByAccount));
                 persisted++;
             } catch (RuntimeException e) {
                 // One certificate the database rejects must not discard the rest.
                 log.error("Could not persist certificate {} ({}): {}",
-                        certificate.getDomain(), certificate.getResource(), rootMessage(e));
+                        certificate.domain(), certificate.resource(), rootMessage(e));
             }
         }
-
-        scan.setCertificatesDiscovered(persisted);
-        scan.setAccountsCompleted(Math.min(accountCount, accountsWithOutcome.size()));
-        scan.setProgressPercent(100);
 
         // An unrecognised service name is a configuration error worth surfacing,
         // so it counts against the scan even though no task ran for it.
         boolean anyFailure = failures.get() > 0 || !plan.unknownServices().isEmpty();
         boolean anySuccess = successes.get() > 0;
 
-        if (anyFailure && anySuccess) {
-            scan.transitionTo(ScanState.PARTIAL_SUCCESS);
-        } else if (anyFailure) {
-            scan.transitionTo(ScanState.FAILED);
-        } else {
-            scan.transitionTo(ScanState.COMPLETED);
-        }
+        ScanState finalState = anyFailure
+                ? (anySuccess ? ScanState.PARTIAL_SUCCESS : ScanState.FAILED)
+                : ScanState.COMPLETED;
+
+        Scan finished = scan
+                .withProgress(100, Math.min(accountCount, accountsWithOutcome.size()), persisted)
+                .transitionTo(finalState);
 
         log.info("Scan {} finished: {} certificate(s), {} task(s) ok, {} failed -> {}",
-                scan.getId(), persisted, successes.get(), failures.get(), scan.getStatus());
-        scanRepositoryPort.save(scan);
+                finished.id(), persisted, successes.get(), failures.get(), finished.status());
+        scanRepositoryPort.save(finished);
+    }
+
+    /**
+     * Ties a canonical certificate to the scan that found it. The environment column
+     * is NOT NULL, so an account with no environment still gets a placeholder rather
+     * than losing the certificate at the insert.
+     */
+    private static Certificate stamp(Certificate certificate, Scan scan, Map<String, String> environmentByAccount) {
+        String environment = certificate.environment() != null
+                ? certificate.environment()
+                : environmentByAccount.getOrDefault(certificate.accountId(), "unassigned");
+
+        return certificate.toBuilder()
+                .scanId(scan.id())
+                .environment(environment)
+                .build();
     }
 
     private void failScan(Scan scan) {
+        Scan failed;
         try {
-            scan.transitionTo(ScanState.FAILED);
+            failed = scan.transitionTo(ScanState.FAILED);
         } catch (IllegalStateException alreadyTerminal) {
-            scan.setStatus(ScanState.FAILED);
+            failed = scan.withStatus(ScanState.FAILED);
         }
-        scanRepositoryPort.save(scan);
+        scanRepositoryPort.save(failed);
     }
 
     private static ThreadFactory namedDaemonThreads(String prefix) {

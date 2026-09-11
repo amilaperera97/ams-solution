@@ -22,6 +22,8 @@ import software.amazon.awssdk.services.cloudfront.model.ListDistributionsRespons
 import software.amazon.awssdk.services.cloudfront.model.ListTagsForResourceRequest;
 import software.amazon.awssdk.services.cloudfront.model.ViewerCertificate;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -71,7 +73,7 @@ public class AwsCloudFrontDiscoveryStrategy extends AbstractAwsDiscoveryStrategy
     }
 
     @Override
-    protected void discoverLive(ScanContext context, DiscoveryResult result) {
+    protected void discoverLive(ScanContext context, DiscoveryResult.Accumulator result) {
         Map<String, Certificate> byKey = new LinkedHashMap<>();
         int distributions = 0;
 
@@ -114,21 +116,23 @@ public class AwsCloudFrontDiscoveryStrategy extends AbstractAwsDiscoveryStrategy
                           .orElseGet(() -> resolver.unresolved(context, certificateArn, descriptor().key()))
                 : cloudFrontManaged(context, distribution));
 
-        CertificateUsage usage = usage(context, descriptor().key(), distribution.arn(), "Distribution", "ATTACHED");
-        usage.setRegion(HOME_REGION);
-        certificate.addUsage(usage);
+        CertificateUsage usage = usage(context, descriptor().key(), distribution.arn(), "Distribution", "ATTACHED")
+                .withRegion(HOME_REGION);
 
-        certificate.addTag(new ResourceTag("cloudfront:distributionId", distribution.id()));
-        certificate.addTag(new ResourceTag("cloudfront:domainName", distribution.domainName()));
+        List<ResourceTag> tags = new ArrayList<>();
+        tags.add(new ResourceTag("cloudfront:distributionId", distribution.id()));
+        tags.add(new ResourceTag("cloudfront:domainName", distribution.domainName()));
         if (distribution.aliases() != null && distribution.aliases().hasItems()) {
-            certificate.addTag(new ResourceTag("cloudfront:aliases", String.join(",", distribution.aliases().items())));
+            tags.add(new ResourceTag("cloudfront:aliases", String.join(",", distribution.aliases().items())));
         }
         if (viewer != null && viewer.minimumProtocolVersionAsString() != null) {
             // Worth surfacing: a current certificate behind TLS 1.0 is still a finding.
-            certificate.addTag(new ResourceTag("cloudfront:minimumProtocolVersion",
+            tags.add(new ResourceTag("cloudfront:minimumProtocolVersion",
                     viewer.minimumProtocolVersionAsString()));
         }
-        readTags(cloudFront, distribution.arn(), certificate);
+        tags.addAll(readTags(cloudFront, distribution.arn()));
+
+        byKey.put(key, certificate.withUsage(usage).withTags(tags));
     }
 
     /** ACM ARN when present; otherwise the IAM certificate id, rebuilt into an ARN the resolver understands. */
@@ -150,23 +154,26 @@ public class AwsCloudFrontDiscoveryStrategy extends AbstractAwsDiscoveryStrategy
      * visible in the inventory instead of looking like a gap in coverage.
      */
     private Certificate cloudFrontManaged(ScanContext context, DistributionSummary distribution) {
-        Certificate certificate = newCertificate(context, "CLOUDFRONT_DEFAULT");
-        certificate.setRegion(HOME_REGION);
-        certificate.setDomain(distribution.domainName());
-        certificate.setResource(distribution.arn());
-        certificate.setStatus("MANAGED_BY_AWS");
-        certificate.setIssuer("Amazon");
-        certificate.setAutoRenewal(true);
-        return certificate;
+        return newCertificate(context, "CLOUDFRONT_DEFAULT")
+                .region(HOME_REGION)
+                .domain(distribution.domainName())
+                .resource(distribution.arn())
+                .status("MANAGED_BY_AWS")
+                .issuer("Amazon")
+                .autoRenewal(true)
+                .build();
     }
 
-    private void readTags(CloudFrontClient cloudFront, String distributionArn, Certificate certificate) {
+    private List<ResourceTag> readTags(CloudFrontClient cloudFront, String distributionArn) {
         try {
-            cloudFront.listTagsForResource(ListTagsForResourceRequest.builder().resource(distributionArn).build())
-                      .tags().items()
-                      .forEach(tag -> certificate.addTag(new ResourceTag(tag.key(), tag.value())));
+            return cloudFront.listTagsForResource(
+                    ListTagsForResourceRequest.builder().resource(distributionArn).build())
+                .tags().items().stream()
+                .map(tag -> new ResourceTag(tag.key(), tag.value()))
+                .toList();
         } catch (SdkException e) {
             log.debug("Could not read tags for {}: {}", distributionArn, e.getMessage());
+            return List.of();
         }
     }
 }

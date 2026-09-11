@@ -28,7 +28,7 @@ public class AccountController {
             request.authType(),
             request.toCredentials()
         );
-        return ResponseEntity.status(HttpStatus.CREATED).body(new AccountResponse(created));
+        return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(created));
     }
 
     @PutMapping("/accounts/{id}")
@@ -40,13 +40,13 @@ public class AccountController {
             request.authType(),
             request.toCredentials()
         );
-        return ResponseEntity.ok(new AccountResponse(updated));
+        return ResponseEntity.ok(AccountResponse.from(updated));
     }
 
     @GetMapping("/environments/{environmentId}/accounts")
     public ResponseEntity<List<AccountResponse>> getAccountsByEnvironment(@PathVariable String environmentId) {
         List<AccountResponse> accounts = accountService.getAccountsByEnvironmentId(environmentId).stream()
-                .map(AccountResponse::new)
+                .map(AccountResponse::from)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(accounts);
     }
@@ -54,7 +54,7 @@ public class AccountController {
     @GetMapping("/accounts/{id}")
     public ResponseEntity<AccountResponse> getAccount(@PathVariable String id) {
         return accountService.getAccount(id)
-                .map(AccountResponse::new)
+                .map(AccountResponse::from)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

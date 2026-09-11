@@ -35,20 +35,15 @@ class ScanServiceTest {
 
     @Test
     void shouldCreateAndQueueScan() {
-        Scan savedScan = new Scan();
-        savedScan.setId("scan-123");
-        savedScan.setStatus(ScanState.REQUESTED);
-
         when(scanRepositoryPort.save(any(Scan.class))).thenAnswer(invocation -> {
             Scan arg = invocation.getArgument(0);
-            if (arg.getId() == null) arg.setId("scan-123");
-            return arg;
+            return arg.id() == null ? arg.withId("scan-123") : arg;
         });
 
         Scan result = scanService.createScan("Test Scan", ScanScopeType.ACCOUNT, null, null, Collections.singletonList("acc-123"), null, null);
 
         assertNotNull(result);
-        assertEquals(ScanState.QUEUED, result.getStatus());
+        assertEquals(ScanState.QUEUED, result.status());
         verify(scanJobPublisher, times(1)).publish(anyString());
         // Save is called twice: once for initial save, once after state transition to QUEUED
         verify(scanRepositoryPort, times(2)).save(any(Scan.class));

@@ -25,44 +25,45 @@ import java.util.UUID;
 public class SimulatedCertificateFactory {
 
     public Certificate certificateFor(ScanContext context, DiscoveryServiceDescriptor descriptor) {
-        String accountId = context.getAccount() != null ? context.getAccount().getId() : "unknown";
-        String region = context.getRegion() != null ? context.getRegion() : "unknown";
+        String accountId = context.accountId() != null ? context.accountId() : "unknown";
+        String region = context.region() != null ? context.region() : "unknown";
         String slug = descriptor.key().toLowerCase(Locale.ROOT).replace('_', '-');
         String seed = descriptor.qualifiedKey() + "|" + accountId + "|" + region;
+        String resource = simulatedResource(descriptor, accountId, region, slug);
 
-        Certificate certificate = new Certificate();
-        certificate.setId("cert-" + UUID.nameUUIDFromBytes(seed.getBytes()));
-        certificate.setProvider(descriptor.provider().name());
-        certificate.setAccountId(accountId);
-        certificate.setRegion(region);
-        certificate.setService(descriptor.key());
-        certificate.setSourceType("SIMULATED");
-        certificate.setDomain(slug + ".example.com");
-        certificate.setSubject("CN=" + slug + ".example.com, O=Example Ltd, C=GB");
-        certificate.setIssuer("CN=Example Issuing CA, O=Example Ltd, C=GB");
-        certificate.setStatus("VALID");
-        certificate.setAlgorithm("RSA");
-        certificate.setKeySize(2048);
-        certificate.setAutoRenewal(false);
-        // Stable per seed, so the same simulated certificate deduplicates across regions.
-        certificate.setSerialNumber(String.format("%016X", (long) seed.hashCode() << 32 | 0xABCDEF01L));
-        certificate.setFingerprint(simulatedFingerprint(seed));
-        certificate.setIssuedDate(Instant.now().minus(Duration.ofDays(90)));
-        certificate.setExpiryDate(Instant.now().plus(Duration.ofDays(275)));
-        certificate.setResource(simulatedResource(descriptor, accountId, region, slug));
-        certificate.setCreatedAt(Instant.now());
-        certificate.addTag(new ResourceTag("simulated", "true"));
+        CertificateUsage usage = CertificateUsage.builder()
+                .service(descriptor.key())
+                .resource(resource)
+                .resourceType(descriptor.label())
+                .usageType("SIMULATED")
+                .region(region)
+                .account(accountId)
+                .build();
 
-        CertificateUsage usage = new CertificateUsage();
-        usage.setService(descriptor.key());
-        usage.setResource(certificate.getResource());
-        usage.setResourceType(descriptor.label());
-        usage.setUsageType("SIMULATED");
-        usage.setRegion(region);
-        usage.setAccount(accountId);
-        certificate.addUsage(usage);
-
-        return certificate;
+        return Certificate.builder()
+                .id("cert-" + UUID.nameUUIDFromBytes(seed.getBytes()))
+                .provider(descriptor.provider().name())
+                .accountId(accountId)
+                .region(region)
+                .service(descriptor.key())
+                .sourceType("SIMULATED")
+                .domain(slug + ".example.com")
+                .subject("CN=" + slug + ".example.com, O=Example Ltd, C=GB")
+                .issuer("CN=Example Issuing CA, O=Example Ltd, C=GB")
+                .status("VALID")
+                .algorithm("RSA")
+                .keySize(2048)
+                .autoRenewal(false)
+                // Stable per seed, so the same simulated certificate deduplicates across regions.
+                .serialNumber(String.format("%016X", (long) seed.hashCode() << 32 | 0xABCDEF01L))
+                .fingerprint(simulatedFingerprint(seed))
+                .issuedDate(Instant.now().minus(Duration.ofDays(90)))
+                .expiryDate(Instant.now().plus(Duration.ofDays(275)))
+                .resource(resource)
+                .createdAt(Instant.now())
+                .tag(new ResourceTag("simulated", "true"))
+                .usage(usage)
+                .build();
     }
 
     private static String simulatedResource(DiscoveryServiceDescriptor descriptor,

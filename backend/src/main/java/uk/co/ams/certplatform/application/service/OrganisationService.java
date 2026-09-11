@@ -18,14 +18,16 @@ public class OrganisationService {
     }
 
     public Organisation createOrganisation(String name, String description) {
-        Organisation org = new Organisation();
-        org.setId("org-" + UUID.randomUUID().toString());
-        org.setName(name);
-        org.setDescription(description);
-        org.setStatus("ACTIVE");
-        org.setCreatedAt(Instant.now());
-        org.setUpdatedAt(Instant.now());
-        
+        Instant now = Instant.now();
+        Organisation org = Organisation.builder()
+                .id("org-" + UUID.randomUUID())
+                .name(name)
+                .description(description)
+                .status("ACTIVE")
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+
         return repositoryPort.save(org);
     }
 

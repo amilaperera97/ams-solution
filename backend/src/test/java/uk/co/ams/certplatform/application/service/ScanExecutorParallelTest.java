@@ -71,11 +71,12 @@ class ScanExecutorParallelTest {
                 new CertificateIdentityResolver(), certificateRepositoryPort,
                 new AccountRateLimiters(properties), properties);
 
-        account = new Account();
-        account.setId("acc-1");
-        account.setProviderId("prov-1");
-        account.setRegion("eu-west-2");
-        account.setAuthType(AccountAuthType.ACCESS_KEY);
+        account = Account.builder()
+                .id("acc-1")
+                .providerId("prov-1")
+                .region("eu-west-2")
+                .authType(AccountAuthType.ACCESS_KEY)
+                .build();
         when(accountRepositoryPort.findById("acc-1")).thenReturn(Optional.of(account));
         when(providerRepositoryPort.findById("prov-1")).thenReturn(Optional.of(
                 new Provider("prov-1", "AWS", "org-1", CloudProviderType.AWS, "ACTIVE", null, null)));
@@ -83,7 +84,7 @@ class ScanExecutorParallelTest {
 
     @Test
     void runsTheRegionsOfAServiceConcurrently() throws InterruptedException {
-        Scan scan = scan("scan-1", Arrays.asList("eu-west-1", "eu-west-2"), Collections.singletonList("ACM"));
+        scan("scan-1", Arrays.asList("eu-west-1", "eu-west-2"), Collections.singletonList("ACM"));
         CountDownLatch bothStarted = new CountDownLatch(2);
 
         when(acmStrategy.discover(any(ScanContext.class))).thenAnswer(invocation -> {
@@ -91,64 +92,64 @@ class ScanExecutorParallelTest {
             // Neither call can return until the other has started, so a sequential
             // executor would deadlock here rather than merely being slow.
             assertTrue(bothStarted.await(5, TimeUnit.SECONDS), "regions were not scanned concurrently");
-            return new DiscoveryResult();
+            return DiscoveryResult.accumulator().build();
         });
 
         executor.executeScan("scan-1");
 
         verify(acmStrategy, times(2)).discover(any(ScanContext.class));
-        assertEquals(ScanState.COMPLETED, scan.getStatus());
+        assertEquals(ScanState.COMPLETED, savedScan().status());
     }
 
     @Test
     void reportsPartialSuccessWhenOneServiceFailsAndAnotherWorks() {
-        Scan scan = scan("scan-2", Collections.singletonList("eu-west-1"), Arrays.asList("ACM", "ALB"));
+        scan("scan-2", Collections.singletonList("eu-west-1"), Arrays.asList("ACM", "ALB"));
 
-        when(acmStrategy.discover(any())).thenReturn(new DiscoveryResult().succeeded("ok"));
+        when(acmStrategy.discover(any())).thenReturn(DiscoveryResult.accumulator().succeeded("ok"));
         when(albStrategy.discover(any())).thenThrow(new RuntimeException("ELB API down"));
 
         executor.executeScan("scan-2");
 
-        assertEquals(ScanState.PARTIAL_SUCCESS, savedScan().getStatus());
+        assertEquals(ScanState.PARTIAL_SUCCESS, savedScan().status());
     }
 
     @Test
     void treatsADeniedServiceAsSkippedRatherThanAFailedScan() {
-        Scan scan = scan("scan-3", Collections.singletonList("eu-west-1"), Arrays.asList("ACM", "ALB"));
+        scan("scan-3", Collections.singletonList("eu-west-1"), Arrays.asList("ACM", "ALB"));
 
-        when(acmStrategy.discover(any())).thenReturn(new DiscoveryResult().succeeded("ok"));
-        when(albStrategy.discover(any())).thenReturn(new DiscoveryResult().skipped("not permitted"));
+        when(acmStrategy.discover(any())).thenReturn(DiscoveryResult.accumulator().succeeded("ok"));
+        when(albStrategy.discover(any())).thenReturn(DiscoveryResult.accumulator().skipped("not permitted"));
 
         executor.executeScan("scan-3");
 
-        assertEquals(ScanState.COMPLETED, savedScan().getStatus(),
+        assertEquals(ScanState.COMPLETED, savedScan().status(),
                 "a service the credentials cannot read is a coverage gap, not a broken scan");
     }
 
     @Test
     void failsTheScanWhenAServiceNameMatchesNothing() {
-        Scan scan = scan("scan-4", Collections.singletonList("eu-west-1"), Arrays.asList("ACM", "NOT_A_SERVICE"));
-        when(acmStrategy.discover(any())).thenReturn(new DiscoveryResult().succeeded("ok"));
+        scan("scan-4", Collections.singletonList("eu-west-1"), Arrays.asList("ACM", "NOT_A_SERVICE"));
+        when(acmStrategy.discover(any())).thenReturn(DiscoveryResult.accumulator().succeeded("ok"));
 
         executor.executeScan("scan-4");
 
-        assertEquals(ScanState.PARTIAL_SUCCESS, savedScan().getStatus(),
+        assertEquals(ScanState.PARTIAL_SUCCESS, savedScan().status(),
                 "a service name nothing claims is a configuration error worth surfacing");
     }
 
     @Test
     void keepsCertificatesFromAPartialResult() {
-        Scan scan = scan("scan-5", Collections.singletonList("eu-west-1"), Collections.singletonList("ACM"));
+        scan("scan-5", Collections.singletonList("eu-west-1"), Collections.singletonList("ACM"));
 
-        DiscoveryResult throttled = new DiscoveryResult();
-        throttled.addCertificate(certificate("a.example.com"));
-        throttled.partial("throttled");
+        DiscoveryResult throttled = DiscoveryResult.accumulator()
+                .addCertificate(certificate("a.example.com"))
+                .partial("throttled");
         when(acmStrategy.discover(any())).thenReturn(throttled);
 
         executor.executeScan("scan-5");
 
         verify(certificateRepositoryPort, times(1)).save(any());
-        assertEquals(1, scan.getCertificatesDiscovered());
+        assertEquals(1, savedScan().certificatesDiscovered());
     }
 
     @Test
@@ -163,17 +164,18 @@ class ScanExecutorParallelTest {
                 new AccountRateLimiters(properties), properties);
 
         scan("scan-6", Collections.singletonList("eu-west-1"), Arrays.asList("ACM", "ALB"));
-        when(acmStrategy.discover(any())).thenReturn(new DiscoveryResult().succeeded("ok"));
+        when(acmStrategy.discover(any())).thenReturn(DiscoveryResult.accumulator().succeeded("ok"));
 
         configured.executeScan("scan-6");
 
         verify(albStrategy, never()).discover(any());
-        assertEquals(ScanState.COMPLETED, savedScan().getStatus());
+        assertEquals(ScanState.COMPLETED, savedScan().status());
     }
 
     @Test
     void dispatchesUsingTheProviderTheAccountBelongsTo() {
-        account.setProviderId("prov-azure");
+        when(accountRepositoryPort.findById("acc-1"))
+                .thenReturn(Optional.of(account.toBuilder().providerId("prov-azure").build()));
         when(providerRepositoryPort.findById("prov-azure")).thenReturn(Optional.of(
                 new Provider("prov-azure", "Azure", "org-1", CloudProviderType.AZURE, "ACTIVE", null, null)));
 
@@ -185,12 +187,13 @@ class ScanExecutorParallelTest {
     }
 
     private Scan scan(String id, List<String> regions, List<String> services) {
-        Scan scan = new Scan();
-        scan.setId(id);
-        scan.setScopeType(ScanScopeType.ACCOUNT);
-        scan.setAccountIds(Collections.singletonList("acc-1"));
-        scan.setRegions(regions);
-        scan.setServices(services);
+        Scan scan = Scan.builder()
+                .id(id)
+                .scopeType(ScanScopeType.ACCOUNT)
+                .accountIds(Collections.singletonList("acc-1"))
+                .regions(regions)
+                .services(services)
+                .build();
         when(scanRepositoryPort.findById(id)).thenReturn(Optional.of(scan));
         return scan;
     }
@@ -202,11 +205,10 @@ class ScanExecutorParallelTest {
     }
 
     private static uk.co.ams.certplatform.domain.model.Certificate certificate(String domain) {
-        uk.co.ams.certplatform.domain.model.Certificate certificate =
-                new uk.co.ams.certplatform.domain.model.Certificate();
-        certificate.setDomain(domain);
-        certificate.setFingerprint("AA:BB:" + domain);
-        return certificate;
+        return uk.co.ams.certplatform.domain.model.Certificate.builder()
+                .domain(domain)
+                .fingerprint("AA:BB:" + domain)
+                .build();
     }
 
     @Test
@@ -216,6 +218,6 @@ class ScanExecutorParallelTest {
         executor.executeScan("gone");
 
         verify(scanRepositoryPort, never()).save(any());
-        assertEquals(DiscoveryStatus.SUCCESS, new DiscoveryResult().getStatus());
+        assertEquals(DiscoveryStatus.SUCCESS, DiscoveryResult.accumulator().build().status());
     }
 }

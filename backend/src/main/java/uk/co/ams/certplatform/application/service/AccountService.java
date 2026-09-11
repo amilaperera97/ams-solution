@@ -53,24 +53,25 @@ public class AccountService {
         Environment env = environmentRepositoryPort.findById(environmentId)
             .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + environmentId));
 
-        Provider provider = providerRepositoryPort.findById(env.getProviderId())
-            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + env.getProviderId()));
+        Provider provider = providerRepositoryPort.findById(env.providerId())
+            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + env.providerId()));
 
         AccountCredentials creds = (credentials != null ? credentials : AccountCredentials.none()).trimmed();
 
-        validate(accountId, authType, creds, provider.getType());
+        validate(accountId, authType, creds, provider.type());
 
-        Account account = new Account();
-        account.setId("acc-" + UUID.randomUUID());
-        account.setOrganisationId(env.getOrganisationId());
-        account.setProviderId(env.getProviderId());
-        account.setEnvironmentId(environmentId);
-        account.setName(name);
-        account.setAccountId(accountId);
-        account.setStatus("ACTIVE");
-        account.setCreatedAt(Instant.now());
-        account.setUpdatedAt(Instant.now());
-        apply(account, authType, creds);
+        Instant now = Instant.now();
+        Account account = withCredentials(Account.builder(), authType, creds)
+                .id("acc-" + UUID.randomUUID())
+                .organisationId(env.organisationId())
+                .providerId(env.providerId())
+                .environmentId(environmentId)
+                .name(name)
+                .accountId(accountId)
+                .status("ACTIVE")
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
 
         return accountRepositoryPort.save(account);
     }
@@ -85,36 +86,37 @@ public class AccountService {
         Account existing = accountRepositoryPort.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Account not found: " + id));
 
-        Provider provider = providerRepositoryPort.findById(existing.getProviderId())
-            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + existing.getProviderId()));
+        Provider provider = providerRepositoryPort.findById(existing.providerId())
+            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + existing.providerId()));
 
         AccountCredentials merged = (credentials != null ? credentials : AccountCredentials.none())
                 .trimmed()
                 .mergedOver(AccountCredentials.of(existing));
-        AccountAuthType effectiveAuthType = authType != null ? authType : existing.getAuthType();
-        String effectiveAccountId = isPresent(accountId) ? accountId.trim() : existing.getAccountId();
+        AccountAuthType effectiveAuthType = authType != null ? authType : existing.authType();
+        String effectiveAccountId = isPresent(accountId) ? accountId.trim() : existing.accountId();
 
-        validate(effectiveAccountId, effectiveAuthType, merged, provider.getType());
+        validate(effectiveAccountId, effectiveAuthType, merged, provider.type());
 
-        if (isPresent(name)) {
-            existing.setName(name.trim());
-        }
-        existing.setAccountId(effectiveAccountId);
-        existing.setUpdatedAt(Instant.now());
-        apply(existing, effectiveAuthType, merged);
+        Account updated = withCredentials(existing.toBuilder(), effectiveAuthType, merged)
+                .name(isPresent(name) ? name.trim() : existing.name())
+                .accountId(effectiveAccountId)
+                .updatedAt(Instant.now())
+                .build();
 
-        return accountRepositoryPort.save(existing);
+        return accountRepositoryPort.save(updated);
     }
 
     /** Secrets are encrypted on the way into the database by AccountRepositoryAdapter. */
-    private void apply(Account account, AccountAuthType authType, AccountCredentials creds) {
-        account.setAuthType(authType);
-        account.setToken(creds.token());
-        account.setRoleArn(creds.roleArn());
-        account.setExternalId(creds.externalId());
-        account.setAccessKeyId(creds.accessKeyId());
-        account.setSecretAccessKey(creds.secretAccessKey());
-        account.setRegion(creds.region());
+    private Account.Builder withCredentials(Account.Builder builder, AccountAuthType authType,
+                                            AccountCredentials creds) {
+        return builder
+                .authType(authType)
+                .token(creds.token())
+                .roleArn(creds.roleArn())
+                .externalId(creds.externalId())
+                .accessKeyId(creds.accessKeyId())
+                .secretAccessKey(creds.secretAccessKey())
+                .region(creds.region());
     }
 
     private void validate(String accountId, AccountAuthType authType, AccountCredentials creds,
@@ -202,10 +204,10 @@ public class AccountService {
         Account account = accountRepositoryPort.findById(accountId)
             .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
 
-        Provider provider = providerRepositoryPort.findById(account.getProviderId())
-            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + account.getProviderId()));
+        Provider provider = providerRepositoryPort.findById(account.providerId())
+            .orElseThrow(() -> new IllegalArgumentException("Provider not found: " + account.providerId()));
 
-        return cloudProviderResolver.getAdapter(provider.getType()).testConnection(account);
+        return cloudProviderResolver.getAdapter(provider.type()).testConnection(account);
     }
 
     private static boolean isPresent(String value) {

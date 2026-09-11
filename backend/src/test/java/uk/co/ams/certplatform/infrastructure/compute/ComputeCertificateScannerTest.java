@@ -33,20 +33,20 @@ class ComputeCertificateScannerTest {
         DiscoveryResult result = scan(new ComputeCertificateScanner(
                 List.of(executor), List.of(new StubSource(OsFamily.LINUX, 1))));
 
-        assertEquals(DiscoveryStatus.SUCCESS, result.getStatus());
-        assertEquals(1, result.getCertificates().size());
+        assertEquals(DiscoveryStatus.SUCCESS, result.status());
+        assertEquals(1, result.certificates().size());
 
-        Certificate certificate = result.getCertificates().get(0);
-        assertEquals("AWS", certificate.getProvider());
-        assertEquals("acc-1", certificate.getAccountId());
-        assertEquals("eu-west-2", certificate.getRegion());
-        assertEquals("EC2", certificate.getService());
-        assertEquals(Boolean.FALSE, certificate.getAutoRenewal(),
+        Certificate certificate = result.certificates().get(0);
+        assertEquals("AWS", certificate.provider());
+        assertEquals("acc-1", certificate.accountId());
+        assertEquals("eu-west-2", certificate.region());
+        assertEquals("EC2", certificate.service());
+        assertEquals(Boolean.FALSE, certificate.autoRenewal(),
                 "nothing on a filesystem renews itself - that is the point of finding it");
-        assertEquals("ON_DISK", certificate.getUsages().get(0).getUsageType());
-        assertEquals("i-123", certificate.getUsages().get(0).getResource());
-        assertTrue(certificate.getTags().stream()
-                .anyMatch(tag -> "compute:instanceId".equals(tag.getKey()) && "i-123".equals(tag.getValue())));
+        assertEquals("ON_DISK", certificate.usages().get(0).usageType());
+        assertEquals("i-123", certificate.usages().get(0).resource());
+        assertTrue(certificate.tags().stream()
+                .anyMatch(tag -> "compute:instanceId".equals(tag.key()) && "i-123".equals(tag.value())));
     }
 
     @Test
@@ -67,17 +67,17 @@ class ComputeCertificateScannerTest {
     void treatsAnInstanceThatCouldNotBeReachedAsAGapNotAFailure() {
         RecordingExecutor executor = new RecordingExecutor(
                 List.of(target("i-ok", OsFamily.LINUX), target("i-broken", OsFamily.LINUX)),
-                target -> "i-broken".equals(target.getId())
+                target -> "i-broken".equals(target.id())
                         ? ComputeCommandResult.failure(target, "agent not responding")
                         : new ComputeCommandResult(target, true, "one", "", false));
 
         DiscoveryResult result = scan(new ComputeCertificateScanner(
                 List.of(executor), List.of(new StubSource(OsFamily.LINUX, 1))));
 
-        assertEquals(DiscoveryStatus.PARTIAL, result.getStatus(),
+        assertEquals(DiscoveryStatus.PARTIAL, result.status(),
                 "one unreachable box means an incomplete answer, not a failed one");
-        assertEquals(1, result.getCertificates().size());
-        assertTrue(result.getErrors().get(0).contains("i-broken"));
+        assertEquals(1, result.certificates().size());
+        assertTrue(result.errors().get(0).contains("i-broken"));
     }
 
     @Test
@@ -88,8 +88,8 @@ class ComputeCertificateScannerTest {
         DiscoveryResult result = scan(new ComputeCertificateScanner(
                 List.of(executor), List.of(new StubSource(OsFamily.LINUX, 1))));
 
-        assertEquals(DiscoveryStatus.PARTIAL, result.getStatus());
-        assertTrue(result.getErrors().get(0).contains("truncated"));
+        assertEquals(DiscoveryStatus.PARTIAL, result.status());
+        assertTrue(result.errors().get(0).contains("truncated"));
     }
 
     @Test
@@ -98,8 +98,8 @@ class ComputeCertificateScannerTest {
                 List.of(new RecordingExecutor(List.of(), target -> null)),
                 List.of(new StubSource(OsFamily.LINUX, 1))));
 
-        assertEquals(DiscoveryStatus.SUCCESS, result.getStatus());
-        assertTrue(result.getMessage().contains("No agent-managed instances"));
+        assertEquals(DiscoveryStatus.SUCCESS, result.status());
+        assertTrue(result.message().contains("No agent-managed instances"));
     }
 
     @Test
@@ -120,14 +120,14 @@ class ComputeCertificateScannerTest {
                         List.of(new StubSource(OsFamily.LINUX, 1))),
                 new DiscoveryOptions(false, false, 5000));
 
-        assertEquals(DiscoveryStatus.SKIPPED, result.getStatus());
+        assertEquals(DiscoveryStatus.SKIPPED, result.status());
     }
 
     @Test
     void saysSoWhenNoExecutorCanReachTheProvider() {
         DiscoveryResult result = scan(new ComputeCertificateScanner(List.of(), List.of()));
 
-        assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.getStatus());
+        assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.status());
     }
 
     // --- harness -------------------------------------------------------------
@@ -139,22 +139,17 @@ class ComputeCertificateScannerTest {
     private DiscoveryResult scan(ComputeCertificateScanner scanner, DiscoveryOptions options) {
         ScanContext context = new ScanContext("scan-1", ACCOUNT, CloudProviderType.AWS,
                 "eu-west-2", "EC2", null, options);
-        DiscoveryResult result = new DiscoveryResult("AWS", "acc-1", "eu-west-2", "EC2");
+        DiscoveryResult.Accumulator result = DiscoveryResult.accumulator("AWS", "acc-1", "eu-west-2", "EC2");
         scanner.scan(context, result, "EC2", "EC2 instance");
-        return result;
+        return result.build();
     }
 
     private static Account account() {
-        Account account = new Account();
-        account.setId("acc-1");
-        account.setRegion("eu-west-2");
-        return account;
+        return Account.builder().id("acc-1").region("eu-west-2").build();
     }
 
     private static ComputeTarget target(String id, OsFamily osFamily) {
-        ComputeTarget target = new ComputeTarget(id, osFamily);
-        target.setService("EC2");
-        return target;
+        return ComputeTarget.builder(id).osFamily(osFamily).service("EC2").build();
     }
 
     /** Answers with canned results and records which targets it was handed. */
@@ -198,12 +193,12 @@ class ComputeCertificateScannerTest {
 
         @Override
         public List<Certificate> parse(ScanContext context, ComputeCommandResult result) {
-            scannedInstanceIds.add(result.target().getId());
+            scannedInstanceIds.add(result.target().id());
             List<Certificate> certificates = new ArrayList<>();
             for (int i = 0; i < certificatesPerHost; i++) {
-                Certificate certificate = new Certificate();
-                certificate.setFingerprint("AA:" + result.target().getId() + ":" + i);
-                certificates.add(certificate);
+                certificates.add(Certificate.builder()
+                        .fingerprint("AA:" + result.target().id() + ":" + i)
+                        .build());
             }
             return certificates;
         }

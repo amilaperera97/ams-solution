@@ -26,32 +26,33 @@ public class ScanService {
 
     @Transactional
     public Scan createScan(String name, ScanScopeType scopeType, List<String> providerIds, List<String> environmentIds, List<String> accountIds, List<String> regions, List<String> services) {
-        Scan scan = new Scan();
-        scan.setId("scan-" + UUID.randomUUID().toString());
-        scan.setName(name);
-        scan.setScopeType(scopeType);
-        scan.setProviderIds(providerIds);
-        scan.setEnvironmentIds(environmentIds);
-        scan.setAccountIds(accountIds);
-        scan.setRegions(regions);
-        scan.setServices(services);
-        scan.setStatus(ScanState.REQUESTED);
-        scan.setCreatedAt(Instant.now());
-        scan.setUpdatedAt(Instant.now());
-
         // Validate scope
         if (scopeType == ScanScopeType.ACCOUNT && (accountIds == null || accountIds.isEmpty())) {
             throw new IllegalArgumentException("Account IDs are required for ACCOUNT scope");
         }
-        
+
+        Instant now = Instant.now();
+        Scan scan = Scan.builder()
+                .id("scan-" + UUID.randomUUID())
+                .name(name)
+                .scopeType(scopeType)
+                .providerIds(providerIds)
+                .environmentIds(environmentIds)
+                .accountIds(accountIds)
+                .regions(regions)
+                .services(services)
+                .status(ScanState.REQUESTED)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+
         Scan savedScan = scanRepositoryPort.save(scan);
-        
+
         // Transition to QUEUED
-        savedScan.transitionTo(ScanState.QUEUED);
-        savedScan = scanRepositoryPort.save(savedScan);
+        savedScan = scanRepositoryPort.save(savedScan.transitionTo(ScanState.QUEUED));
 
         // Queue the job
-        scanJobPublisher.publish(savedScan.getId());
+        scanJobPublisher.publish(savedScan.id());
 
         return savedScan;
     }
@@ -68,8 +69,7 @@ public class ScanService {
     public Scan cancelScan(String id) {
         Scan scan = scanRepositoryPort.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Scan not found: " + id));
-        scan.transitionTo(ScanState.CANCEL_REQUESTED);
-        return scanRepositoryPort.save(scan);
+        return scanRepositoryPort.save(scan.transitionTo(ScanState.CANCEL_REQUESTED));
     }
 
     @Transactional
@@ -77,14 +77,14 @@ public class ScanService {
         Scan scan = scanRepositoryPort.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Scan not found: " + id));
         
-        if (scan.getStatus() != ScanState.FAILED && scan.getStatus() != ScanState.PARTIAL_SUCCESS) {
+        if (scan.status() != ScanState.FAILED && scan.status() != ScanState.PARTIAL_SUCCESS) {
             throw new IllegalStateException("Can only retry FAILED or PARTIAL_SUCCESS scans.");
         }
-        
-        scan.setStatus(ScanState.QUEUED);
-        scan = scanRepositoryPort.save(scan);
-        scanJobPublisher.publish(scan.getId());
-        return scan;
+
+        // A terminal scan cannot transition, so re-queueing deliberately resets the state.
+        Scan requeued = scanRepositoryPort.save(scan.withStatus(ScanState.QUEUED));
+        scanJobPublisher.publish(requeued.id());
+        return requeued;
     }
 
     @Transactional
@@ -93,13 +93,13 @@ public class ScanService {
                 .orElseThrow(() -> new IllegalArgumentException("Scan not found: " + id));
         
         return createScan(
-                existingScan.getName() + " (Run Again)",
-                existingScan.getScopeType(),
-                existingScan.getProviderIds(),
-                existingScan.getEnvironmentIds(),
-                existingScan.getAccountIds(),
-                existingScan.getRegions(),
-                existingScan.getServices()
+                existingScan.name() + " (Run Again)",
+                existingScan.scopeType(),
+                existingScan.providerIds(),
+                existingScan.environmentIds(),
+                existingScan.accountIds(),
+                existingScan.regions(),
+                existingScan.services()
         );
     }
 }

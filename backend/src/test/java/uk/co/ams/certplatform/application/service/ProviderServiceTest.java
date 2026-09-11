@@ -48,9 +48,9 @@ class ProviderServiceTest {
         Provider result = providerService.createProvider(orgId, "AWS Provider", CloudProviderType.AWS);
 
         assertNotNull(result);
-        assertEquals("prov-123", result.getId());
-        assertEquals(orgId, result.getOrganisationId());
-        assertEquals(CloudProviderType.AWS, result.getType());
+        assertEquals("prov-123", result.id());
+        assertEquals(orgId, result.organisationId());
+        assertEquals(CloudProviderType.AWS, result.type());
         verify(providerRepositoryPort, times(1)).save(any(Provider.class));
     }
 
@@ -77,6 +77,6 @@ class ProviderServiceTest {
 
         assertFalse(results.isEmpty());
         assertEquals(1, results.size());
-        assertEquals(orgId, results.get(0).getOrganisationId());
+        assertEquals(orgId, results.get(0).organisationId());
     }
 }

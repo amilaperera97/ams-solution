@@ -66,8 +66,8 @@ public class AwsClientFactory {
         if (requestedRegion != null && !requestedRegion.isBlank() && !"default".equalsIgnoreCase(requestedRegion)) {
             return requestedRegion;
         }
-        if (account != null && account.getRegion() != null && !account.getRegion().isBlank()) {
-            return account.getRegion();
+        if (account != null && account.region() != null && !account.region().isBlank()) {
+            return account.region();
         }
         return settings().getDefaultRegion();
     }
@@ -113,22 +113,22 @@ public class AwsClientFactory {
      * credentials, so no STS client has to stay open for the life of the call.
      */
     AwsCredentialsProvider credentialsFor(Account account, String region) {
-        AccountAuthType authType = account.getAuthType();
+        AccountAuthType authType = account.authType();
         if (authType == null) {
-            throw new IllegalStateException("Account " + account.getId() + " has no auth type configured");
+            throw new IllegalStateException("Account " + account.id() + " has no auth type configured");
         }
         return switch (authType) {
             case ACCESS_KEY -> StaticCredentialsProvider.create(
                     AwsBasicCredentials.create(requireAccessKeyId(account), requireSecretAccessKey(account)));
             case IAM_ROLE -> cachedAssumeRole(account, region);
             case TOKEN -> throw new IllegalStateException(
-                    "TOKEN auth cannot be used against real AWS. Reconfigure account " + account.getId()
+                    "TOKEN auth cannot be used against real AWS. Reconfigure account " + account.id()
                     + " with ACCESS_KEY or IAM_ROLE.");
         };
     }
 
     private AwsCredentialsProvider cachedAssumeRole(Account account, String region) {
-        String cacheKey = account.getId() + "|" + account.getRoleArn();
+        String cacheKey = account.id() + "|" + account.roleArn();
         CachedCredentials cached = assumedRoleCache.get(cacheKey);
         if (cached != null && cached.isUsable()) {
             return cached.provider();
@@ -150,7 +150,7 @@ public class AwsClientFactory {
                 .build()) {
             AssumeRoleResponse response = base.assumeRole(assumeRoleRequestFor(account));
             Credentials issued = response.credentials();
-            log.debug("Assumed {} for account {}, expires {}", account.getRoleArn(), account.getId(), issued.expiration());
+            log.debug("Assumed {} for account {}, expires {}", account.roleArn(), account.id(), issued.expiration());
             return new CachedCredentials(
                     StaticCredentialsProvider.create(AwsSessionCredentials.create(
                             issued.accessKeyId(), issued.secretAccessKey(), issued.sessionToken())),
@@ -179,23 +179,23 @@ public class AwsClientFactory {
     AwsCredentialsProvider baseCredentialsFor(Account account) {
         if (hasAccessKey(account)) {
             return StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(account.getAccessKeyId(), account.getSecretAccessKey()));
+                    AwsBasicCredentials.create(account.accessKeyId(), account.secretAccessKey()));
         }
         return DefaultCredentialsProvider.create();
     }
 
     /** Built separately from the call so the external-id and session-name rules can be tested offline. */
     AssumeRoleRequest assumeRoleRequestFor(Account account) {
-        if (account.getRoleArn() == null || account.getRoleArn().isBlank()) {
-            throw new IllegalStateException("Account " + account.getId() + " is IAM_ROLE but has no role ARN");
+        if (account.roleArn() == null || account.roleArn().isBlank()) {
+            throw new IllegalStateException("Account " + account.id() + " is IAM_ROLE but has no role ARN");
         }
         AssumeRoleRequest.Builder request = AssumeRoleRequest.builder()
-                .roleArn(account.getRoleArn())
-                .roleSessionName("certplatform-" + shortId(account.getId()))
+                .roleArn(account.roleArn())
+                .roleSessionName("certplatform-" + shortId(account.id()))
                 .durationSeconds(ASSUME_ROLE_DURATION_SECONDS);
         // Required when the target role's trust policy sets a sts:ExternalId condition.
-        if (account.getExternalId() != null && !account.getExternalId().isBlank()) {
-            request.externalId(account.getExternalId());
+        if (account.externalId() != null && !account.externalId().isBlank()) {
+            request.externalId(account.externalId());
         }
         return request.build();
     }
@@ -212,22 +212,22 @@ public class AwsClientFactory {
     }
 
     private static boolean hasAccessKey(Account account) {
-        return account.getAccessKeyId() != null && !account.getAccessKeyId().isBlank()
-                && account.getSecretAccessKey() != null && !account.getSecretAccessKey().isBlank();
+        return account.accessKeyId() != null && !account.accessKeyId().isBlank()
+                && account.secretAccessKey() != null && !account.secretAccessKey().isBlank();
     }
 
     private static String requireAccessKeyId(Account account) {
-        if (account.getAccessKeyId() == null || account.getAccessKeyId().isBlank()) {
-            throw new IllegalStateException("Account " + account.getId() + " is ACCESS_KEY but has no access key id");
+        if (account.accessKeyId() == null || account.accessKeyId().isBlank()) {
+            throw new IllegalStateException("Account " + account.id() + " is ACCESS_KEY but has no access key id");
         }
-        return account.getAccessKeyId();
+        return account.accessKeyId();
     }
 
     private static String requireSecretAccessKey(Account account) {
-        if (account.getSecretAccessKey() == null || account.getSecretAccessKey().isBlank()) {
-            throw new IllegalStateException("Account " + account.getId() + " is ACCESS_KEY but has no secret access key");
+        if (account.secretAccessKey() == null || account.secretAccessKey().isBlank()) {
+            throw new IllegalStateException("Account " + account.id() + " is ACCESS_KEY but has no secret access key");
         }
-        return account.getSecretAccessKey();
+        return account.secretAccessKey();
     }
 
     /** Role session names are limited to 64 chars, so keep only the tail of the account id. */

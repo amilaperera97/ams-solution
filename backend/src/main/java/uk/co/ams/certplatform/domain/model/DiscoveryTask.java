@@ -10,6 +10,6 @@ public record DiscoveryTask(Account account, DiscoveryServiceDescriptor descript
 
     @Override
     public String toString() {
-        return descriptor.qualifiedKey() + "@" + region + " (account " + account.getId() + ")";
+        return descriptor.qualifiedKey() + "@" + region + " (account " + account.id() + ")";
     }
 }

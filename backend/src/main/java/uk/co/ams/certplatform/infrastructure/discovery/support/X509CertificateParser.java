@@ -94,18 +94,18 @@ public class X509CertificateParser {
 
     /** Populates a fresh domain certificate from a parsed JDK certificate. */
     public Certificate toDomain(X509Certificate x509) {
-        Certificate certificate = new Certificate();
-        certificate.setSubject(x509.getSubjectX500Principal().getName());
-        certificate.setIssuer(x509.getIssuerX500Principal().getName());
-        certificate.setSerialNumber(hexSerial(x509.getSerialNumber()));
-        certificate.setFingerprint(sha256Fingerprint(x509));
-        certificate.setIssuedDate(x509.getNotBefore() != null ? x509.getNotBefore().toInstant() : null);
-        certificate.setExpiryDate(x509.getNotAfter() != null ? x509.getNotAfter().toInstant() : null);
-        certificate.setAlgorithm(keyAlgorithmOf(x509));
-        certificate.setKeySize(keySizeOf(x509.getPublicKey()));
-        certificate.setDomain(primaryDomainOf(x509));
-        certificate.setStatus(statusOf(x509));
-        return certificate;
+        return Certificate.builder()
+                .subject(x509.getSubjectX500Principal().getName())
+                .issuer(x509.getIssuerX500Principal().getName())
+                .serialNumber(hexSerial(x509.getSerialNumber()))
+                .fingerprint(sha256Fingerprint(x509))
+                .issuedDate(x509.getNotBefore() != null ? x509.getNotBefore().toInstant() : null)
+                .expiryDate(x509.getNotAfter() != null ? x509.getNotAfter().toInstant() : null)
+                .algorithm(keyAlgorithmOf(x509))
+                .keySize(keySizeOf(x509.getPublicKey()))
+                .domain(primaryDomainOf(x509))
+                .status(statusOf(x509))
+                .build();
     }
 
     /** Uppercase hex, zero-padded to an even length, matching how ACM reports serials. */

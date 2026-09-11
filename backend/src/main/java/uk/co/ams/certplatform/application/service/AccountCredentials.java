@@ -21,8 +21,8 @@ public record AccountCredentials(
 
     /** The credentials already stored against an account. */
     public static AccountCredentials of(Account account) {
-        return new AccountCredentials(account.getToken(), account.getRoleArn(), account.getExternalId(),
-                account.getAccessKeyId(), account.getSecretAccessKey(), account.getRegion());
+        return new AccountCredentials(account.token(), account.roleArn(), account.externalId(),
+                account.accessKeyId(), account.secretAccessKey(), account.region());
     }
 
     public boolean hasAccessKey() {

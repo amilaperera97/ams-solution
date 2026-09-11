@@ -1,34 +1,24 @@
 package uk.co.ams.certplatform.domain.model;
 
-public class ApplicationMetadata {
-    private String applicationName;
-    private String runtime;
-    private String runtimeVersion;
-    private String framework;
-    private String frameworkVersion;
-    private String processName;
-    private String deploymentType;
-
-    public ApplicationMetadata() {}
-
-    public String getApplicationName() { return applicationName; }
-    public void setApplicationName(String applicationName) { this.applicationName = applicationName; }
-
-    public String getRuntime() { return runtime; }
-    public void setRuntime(String runtime) { this.runtime = runtime; }
-
-    public String getRuntimeVersion() { return runtimeVersion; }
-    public void setRuntimeVersion(String runtimeVersion) { this.runtimeVersion = runtimeVersion; }
-
-    public String getFramework() { return framework; }
-    public void setFramework(String framework) { this.framework = framework; }
-
-    public String getFrameworkVersion() { return frameworkVersion; }
-    public void setFrameworkVersion(String frameworkVersion) { this.frameworkVersion = frameworkVersion; }
-
-    public String getProcessName() { return processName; }
-    public void setProcessName(String processName) { this.processName = processName; }
-
-    public String getDeploymentType() { return deploymentType; }
-    public void setDeploymentType(String deploymentType) { this.deploymentType = deploymentType; }
+/**
+ * The application a certificate is serving, when discovery can work it out - the
+ * runtime and framework behind a listener, or the process holding a key on disk.
+ *
+ * @param applicationName human-readable application the certificate belongs to
+ * @param runtime         language runtime, e.g. "java"
+ * @param runtimeVersion  runtime version, e.g. "21"
+ * @param framework       application framework, e.g. "spring-boot"
+ * @param frameworkVersion framework version
+ * @param processName     OS process observed holding the certificate
+ * @param deploymentType  how the application is deployed, e.g. "ECS", "SYSTEMD"
+ */
+public record ApplicationMetadata(
+        String applicationName,
+        String runtime,
+        String runtimeVersion,
+        String framework,
+        String frameworkVersion,
+        String processName,
+        String deploymentType
+) {
 }

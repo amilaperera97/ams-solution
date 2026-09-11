@@ -37,8 +37,8 @@ class OrganisationServiceTest {
         Organisation result = organisationService.createOrganisation("Test Org", "Description");
 
         assertNotNull(result);
-        assertEquals("org-123", result.getId());
-        assertEquals("Test Org", result.getName());
+        assertEquals("org-123", result.id());
+        assertEquals("Test Org", result.name());
         verify(organisationRepositoryPort, times(1)).save(any(Organisation.class));
     }
 
@@ -50,6 +50,6 @@ class OrganisationServiceTest {
         Optional<Organisation> result = organisationService.getOrganisation("org-123");
 
         assertTrue(result.isPresent());
-        assertEquals("org-123", result.get().getId());
+        assertEquals("org-123", result.get().id());
     }
 }

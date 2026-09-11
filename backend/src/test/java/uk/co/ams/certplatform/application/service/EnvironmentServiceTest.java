@@ -47,10 +47,10 @@ class EnvironmentServiceTest {
         Environment result = environmentService.createEnvironment(providerId, "Test Env", "Desc");
 
         assertNotNull(result);
-        assertEquals("env-123", result.getId());
-        assertEquals(providerId, result.getProviderId());
-        assertEquals("org-123", result.getOrganisationId());
-        assertEquals("Test Env", result.getName());
+        assertEquals("env-123", result.id());
+        assertEquals(providerId, result.providerId());
+        assertEquals("org-123", result.organisationId());
+        assertEquals("Test Env", result.name());
         verify(environmentRepositoryPort, times(1)).save(any(Environment.class));
     }
 
@@ -77,6 +77,6 @@ class EnvironmentServiceTest {
 
         assertFalse(results.isEmpty());
         assertEquals(1, results.size());
-        assertEquals(providerId, results.get(0).getProviderId());
+        assertEquals(providerId, results.get(0).providerId());
     }
 }

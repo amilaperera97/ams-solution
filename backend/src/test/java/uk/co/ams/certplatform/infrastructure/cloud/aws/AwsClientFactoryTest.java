@@ -17,22 +17,22 @@ class AwsClientFactoryTest {
     private final AwsClientFactory factory = new AwsClientFactory(properties);
 
     private Account accessKeyAccount() {
-        Account account = new Account();
-        account.setId("acc-1");
-        account.setAuthType(AccountAuthType.ACCESS_KEY);
-        account.setAccessKeyId("AKIAIOSFODNN7EXAMPLE");
-        account.setSecretAccessKey("wJalrXUtnFEMI/K7MDENG");
-        account.setRegion("eu-west-2");
-        return account;
+        return Account.builder()
+                .id("acc-1")
+                .authType(AccountAuthType.ACCESS_KEY)
+                .accessKeyId("AKIAIOSFODNN7EXAMPLE")
+                .secretAccessKey("wJalrXUtnFEMI/K7MDENG")
+                .region("eu-west-2")
+                .build();
     }
 
     private Account iamRoleAccount() {
-        Account account = new Account();
-        account.setId("acc-role");
-        account.setAuthType(AccountAuthType.IAM_ROLE);
-        account.setRoleArn("arn:aws:iam::123456789012:role/CertificateDiscoveryRole");
-        account.setRegion("eu-west-2");
-        return account;
+        return Account.builder()
+                .id("acc-role")
+                .authType(AccountAuthType.IAM_ROLE)
+                .roleArn("arn:aws:iam::123456789012:role/CertificateDiscoveryRole")
+                .region("eu-west-2")
+                .build();
     }
 
     @Test
@@ -45,10 +45,11 @@ class AwsClientFactoryTest {
 
     @Test
     void shouldRejectTokenAuthForAws() {
-        Account account = new Account();
-        account.setId("acc-2");
-        account.setAuthType(AccountAuthType.TOKEN);
-        account.setToken("a-bearer-token");
+        Account account = Account.builder()
+                .id("acc-2")
+                .authType(AccountAuthType.TOKEN)
+                .token("a-bearer-token")
+                .build();
 
         IllegalStateException e = assertThrows(IllegalStateException.class,
             () -> factory.credentialsFor(account, "eu-west-2"));
@@ -57,8 +58,7 @@ class AwsClientFactoryTest {
 
     @Test
     void shouldRejectAccessKeyAuthWithNoSecret() {
-        Account account = accessKeyAccount();
-        account.setSecretAccessKey(null);
+        Account account = accessKeyAccount().toBuilder().secretAccessKey(null).build();
 
         IllegalStateException e = assertThrows(IllegalStateException.class,
             () -> factory.credentialsFor(account, "eu-west-2"));
@@ -74,8 +74,8 @@ class AwsClientFactoryTest {
         // The scan executor passes the literal "default" when a scan names no regions.
         assertEquals("eu-west-2", factory.resolveRegion(account, "default"));
 
-        account.setRegion(null);
-        assertEquals("us-east-1", factory.resolveRegion(account, null), "falls back to configured default");
+        Account regionless = account.toBuilder().region(null).build();
+        assertEquals("us-east-1", factory.resolveRegion(regionless, null), "falls back to configured default");
     }
 
     /**
@@ -92,9 +92,10 @@ class AwsClientFactoryTest {
 
     @Test
     void shouldAssumeRoleWithStoredKeysWhenTheyAreConfiguredAsBootstrapCredentials() {
-        Account account = iamRoleAccount();
-        account.setAccessKeyId("AKIAIOSFODNN7EXAMPLE");
-        account.setSecretAccessKey("wJalrXUtnFEMI/K7MDENG");
+        Account account = iamRoleAccount().toBuilder()
+                .accessKeyId("AKIAIOSFODNN7EXAMPLE")
+                .secretAccessKey("wJalrXUtnFEMI/K7MDENG")
+                .build();
 
         AwsCredentials resolved = factory.baseCredentialsFor(account).resolveCredentials();
 
@@ -104,8 +105,7 @@ class AwsClientFactoryTest {
 
     @Test
     void shouldFallBackToTheDefaultChainWhenOnlyHalfAKeyPairIsStored() {
-        Account account = iamRoleAccount();
-        account.setAccessKeyId("AKIAIOSFODNN7EXAMPLE");
+        Account account = iamRoleAccount().toBuilder().accessKeyId("AKIAIOSFODNN7EXAMPLE").build();
 
         assertInstanceOf(DefaultCredentialsProvider.class, factory.baseCredentialsFor(account));
     }
@@ -119,14 +119,13 @@ class AwsClientFactoryTest {
         assertEquals("arn:aws:iam::123456789012:role/CertificateDiscoveryRole", withoutExternalId.roleArn());
         assertEquals("certplatform-acc-role", withoutExternalId.roleSessionName());
 
-        account.setExternalId("shared-secret-external-id");
-        assertEquals("shared-secret-external-id", factory.assumeRoleRequestFor(account).externalId());
+        Account withExternalId = account.toBuilder().externalId("shared-secret-external-id").build();
+        assertEquals("shared-secret-external-id", factory.assumeRoleRequestFor(withExternalId).externalId());
     }
 
     @Test
     void shouldRejectIamRoleWithNoRoleArn() {
-        Account account = iamRoleAccount();
-        account.setRoleArn(null);
+        Account account = iamRoleAccount().toBuilder().roleArn(null).build();
 
         IllegalStateException e = assertThrows(IllegalStateException.class,
             () -> factory.assumeRoleRequestFor(account));
@@ -135,8 +134,7 @@ class AwsClientFactoryTest {
 
     @Test
     void shouldKeepRoleSessionNameWithinTheAwsLimit() {
-        Account account = iamRoleAccount();
-        account.setId("acc-" + "0123456789".repeat(6));
+        Account account = iamRoleAccount().withId("acc-" + "0123456789".repeat(6));
 
         String sessionName = factory.assumeRoleRequestFor(account).roleSessionName();
 

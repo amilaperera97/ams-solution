@@ -53,18 +53,18 @@ public class ComputeCertificateScanner {
      * @param serviceKey   catalogue key of the calling strategy, stamped onto certificates
      * @param resourceType label for the usage record, e.g. "EC2 instance"
      */
-    public void scan(ScanContext context, DiscoveryResult result, String serviceKey, String resourceType) {
-        if (!context.getOptions().scanComputeFilesystems()) {
+    public void scan(ScanContext context, DiscoveryResult.Accumulator result, String serviceKey, String resourceType) {
+        if (!context.options().scanComputeFilesystems()) {
             result.skipped("Compute filesystem scanning is disabled "
                     + "(certificate-discovery.options.scan-compute-filesystems)");
             return;
         }
 
         Optional<ComputeExecutor> executor = executors.stream()
-                .filter(candidate -> candidate.supports(context.getProvider()))
+                .filter(candidate -> candidate.supports(context.provider()))
                 .findFirst();
         if (executor.isEmpty()) {
-            result.notImplemented("No compute executor is available for " + context.getProvider()
+            result.notImplemented("No compute executor is available for " + context.provider()
                     + "; certificates on disk cannot be read.");
             return;
         }
@@ -72,7 +72,7 @@ public class ComputeCertificateScanner {
         List<ComputeTarget> targets = executor.get().listTargets(context);
         if (targets.isEmpty()) {
             // Genuinely different from a failure: nothing was reachable, so nothing was missed.
-            result.succeeded("No agent-managed instances were reachable in " + result.getRegion());
+            result.succeeded("No agent-managed instances were reachable in " + result.region());
             return;
         }
 
@@ -93,62 +93,72 @@ public class ComputeCertificateScanner {
             }
         }
 
-        result.settle("Scanned " + targets.size() + " instance(s) in " + result.getRegion()
+        result.settle("Scanned " + targets.size() + " instance(s) in " + result.region()
                 + " across " + scanned + " check(s)");
     }
 
-    private void collect(ScanContext context, DiscoveryResult result, ComputeCertificateSource source,
+    private void collect(ScanContext context, DiscoveryResult.Accumulator result, ComputeCertificateSource source,
                          ComputeCommandResult outcome, String serviceKey, String resourceType) {
         ComputeTarget target = outcome.target();
 
         if (!outcome.succeeded()) {
             // One unreachable box is a coverage gap worth reporting, not a scan failure.
-            log.debug("{} on {} did not complete: {}", source.name(), target.getId(), outcome.stderr());
-            result.addError(source.name() + " on " + target.getId() + ": " + summarise(outcome.stderr()));
+            log.debug("{} on {} did not complete: {}", source.name(), target.id(), outcome.stderr());
+            result.addError(source.name() + " on " + target.id() + ": " + summarise(outcome.stderr()));
             return;
         }
         if (outcome.truncated()) {
-            result.addError(source.name() + " on " + target.getId()
+            result.addError(source.name() + " on " + target.id()
                     + ": output was truncated, some certificates may be missing");
         }
 
         for (Certificate certificate : source.parse(context, outcome)) {
-            stamp(context, certificate, target, serviceKey, resourceType);
-            result.addCertificate(certificate);
+            result.addCertificate(stamp(context, certificate, target, serviceKey, resourceType));
         }
     }
 
     /** Gives a certificate found on disk the provenance every other source already has. */
-    private void stamp(ScanContext context, Certificate certificate, ComputeTarget target,
-                       String serviceKey, String resourceType) {
-        if (certificate.getId() == null) certificate.setId("cert-" + UUID.randomUUID());
-        certificate.setProvider(context.getProvider().name());
-        certificate.setAccountId(context.getAccount() != null ? context.getAccount().getId() : null);
-        certificate.setRegion(context.getRegion());
-        certificate.setService(serviceKey);
-        certificate.setCreatedAt(Instant.now());
-        // Nothing on a filesystem renews itself; that is the point of finding them.
-        certificate.setAutoRenewal(false);
+    private Certificate stamp(ScanContext context, Certificate certificate, ComputeTarget target,
+                              String serviceKey, String resourceType) {
+        CertificateUsage usage = CertificateUsage.builder()
+                .service(serviceKey)
+                .resource(target.resourceArn() != null ? target.resourceArn() : target.id())
+                .resourceType(resourceType)
+                .usageType("ON_DISK")
+                .region(context.region())
+                .account(context.accountId())
+                .os(target.os())
+                .build();
 
-        CertificateUsage usage = new CertificateUsage();
-        usage.setService(serviceKey);
-        usage.setResource(target.getResourceArn() != null ? target.getResourceArn() : target.getId());
-        usage.setResourceType(resourceType);
-        usage.setUsageType("ON_DISK");
-        usage.setRegion(context.getRegion());
-        usage.setAccount(context.getAccount() != null ? context.getAccount().getId() : null);
-        usage.setOs(target.getOs());
-        certificate.addUsage(usage);
+        List<ResourceTag> tags = new ArrayList<>();
+        tags.add(new ResourceTag("compute:instanceId", target.id()));
+        if (target.name() != null) tags.add(new ResourceTag("compute:name", target.displayName()));
+        tags.addAll(target.tags());
 
-        certificate.addTag(new ResourceTag("compute:instanceId", target.getId()));
-        if (target.getName() != null) certificate.addTag(new ResourceTag("compute:name", target.displayName()));
-        target.getTags().forEach(certificate::addTag);
+        return certificate.toBuilder()
+                .id(certificate.id() != null ? certificate.id() : "cert-" + UUID.randomUUID())
+                .provider(context.provider().name())
+                .accountId(context.accountId())
+                .region(context.region())
+                .service(serviceKey)
+                .createdAt(Instant.now())
+                // Nothing on a filesystem renews itself; that is the point of finding them.
+                .autoRenewal(false)
+                .usage(usage)
+                .tags(concat(certificate.tags(), tags))
+                .build();
+    }
+
+    private static List<ResourceTag> concat(List<ResourceTag> existing, List<ResourceTag> extra) {
+        List<ResourceTag> combined = new ArrayList<>(existing);
+        combined.addAll(extra);
+        return combined;
     }
 
     private Map<OsFamily, List<ComputeTarget>> groupByPlatform(List<ComputeTarget> targets) {
         Map<OsFamily, List<ComputeTarget>> byPlatform = new EnumMap<>(OsFamily.class);
         for (ComputeTarget target : targets) {
-            byPlatform.computeIfAbsent(target.getOsFamily(), family -> new ArrayList<>()).add(target);
+            byPlatform.computeIfAbsent(target.osFamily(), family -> new ArrayList<>()).add(target);
         }
         // An unidentified platform gets the Unix treatment; on AWS that covers the
         // Linux variants SSM does not name, and a Windows box simply returns nothing.

@@ -53,44 +53,44 @@ public class AccountRepositoryAdapter implements AccountRepositoryPort {
     private AccountEntity toEntity(Account domain) {
         if (domain == null) return null;
         AccountEntity entity = new AccountEntity();
-        entity.setId(domain.getId());
-        entity.setOrganisationId(domain.getOrganisationId());
-        entity.setProviderId(domain.getProviderId());
-        entity.setEnvironmentId(domain.getEnvironmentId());
-        entity.setName(domain.getName());
-        entity.setAccountId(domain.getAccountId());
-        entity.setAuthType(domain.getAuthType());
-        entity.setToken(secretCipher.encrypt(domain.getToken()));
-        entity.setRoleArn(domain.getRoleArn());
-        entity.setExternalId(domain.getExternalId());
-        entity.setAccessKeyId(domain.getAccessKeyId());
-        entity.setSecretAccessKey(secretCipher.encrypt(domain.getSecretAccessKey()));
-        entity.setRegion(domain.getRegion());
-        entity.setStatus(domain.getStatus());
-        entity.setCreatedAt(domain.getCreatedAt());
-        entity.setUpdatedAt(domain.getUpdatedAt());
+        entity.setId(domain.id());
+        entity.setOrganisationId(domain.organisationId());
+        entity.setProviderId(domain.providerId());
+        entity.setEnvironmentId(domain.environmentId());
+        entity.setName(domain.name());
+        entity.setAccountId(domain.accountId());
+        entity.setAuthType(domain.authType());
+        entity.setToken(secretCipher.encrypt(domain.token()));
+        entity.setRoleArn(domain.roleArn());
+        entity.setExternalId(domain.externalId());
+        entity.setAccessKeyId(domain.accessKeyId());
+        entity.setSecretAccessKey(secretCipher.encrypt(domain.secretAccessKey()));
+        entity.setRegion(domain.region());
+        entity.setStatus(domain.status());
+        entity.setCreatedAt(domain.createdAt());
+        entity.setUpdatedAt(domain.updatedAt());
         return entity;
     }
 
     private Account toDomain(AccountEntity entity) {
         if (entity == null) return null;
-        Account account = new Account();
-        account.setId(entity.getId());
-        account.setOrganisationId(entity.getOrganisationId());
-        account.setProviderId(entity.getProviderId());
-        account.setEnvironmentId(entity.getEnvironmentId());
-        account.setName(entity.getName());
-        account.setAccountId(entity.getAccountId());
-        account.setAuthType(entity.getAuthType());
-        account.setToken(secretCipher.decrypt(entity.getToken()));
-        account.setRoleArn(entity.getRoleArn());
-        account.setExternalId(entity.getExternalId());
-        account.setAccessKeyId(entity.getAccessKeyId());
-        account.setSecretAccessKey(secretCipher.decrypt(entity.getSecretAccessKey()));
-        account.setRegion(entity.getRegion());
-        account.setStatus(entity.getStatus());
-        account.setCreatedAt(entity.getCreatedAt());
-        account.setUpdatedAt(entity.getUpdatedAt());
-        return account;
+        return Account.builder()
+                .id(entity.getId())
+                .organisationId(entity.getOrganisationId())
+                .providerId(entity.getProviderId())
+                .environmentId(entity.getEnvironmentId())
+                .name(entity.getName())
+                .accountId(entity.getAccountId())
+                .authType(entity.getAuthType())
+                .token(secretCipher.decrypt(entity.getToken()))
+                .roleArn(entity.getRoleArn())
+                .externalId(entity.getExternalId())
+                .accessKeyId(entity.getAccessKeyId())
+                .secretAccessKey(secretCipher.decrypt(entity.getSecretAccessKey()))
+                .region(entity.getRegion())
+                .status(entity.getStatus())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
     }
 }

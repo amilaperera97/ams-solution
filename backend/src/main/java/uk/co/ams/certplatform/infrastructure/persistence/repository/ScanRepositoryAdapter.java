@@ -39,43 +39,43 @@ public class ScanRepositoryAdapter implements ScanRepositoryPort {
     private ScanEntity toEntity(Scan domain) {
         if (domain == null) return null;
         ScanEntity entity = new ScanEntity();
-        entity.setId(domain.getId());
-        entity.setName(domain.getName());
-        entity.setScopeType(domain.getScopeType());
-        entity.setProviderIds(toListString(domain.getProviderIds()));
-        entity.setEnvironmentIds(toListString(domain.getEnvironmentIds()));
-        entity.setAccountIds(toListString(domain.getAccountIds()));
-        entity.setRegions(toListString(domain.getRegions()));
-        entity.setServices(toListString(domain.getServices()));
-        entity.setStatus(domain.getStatus());
-        entity.setProgressPercent(domain.getProgressPercent());
-        entity.setAccountsTotal(domain.getAccountsTotal());
-        entity.setAccountsCompleted(domain.getAccountsCompleted());
-        entity.setCertificatesDiscovered(domain.getCertificatesDiscovered());
-        entity.setCreatedAt(domain.getCreatedAt());
-        entity.setUpdatedAt(domain.getUpdatedAt());
+        entity.setId(domain.id());
+        entity.setName(domain.name());
+        entity.setScopeType(domain.scopeType());
+        entity.setProviderIds(toListString(domain.providerIds()));
+        entity.setEnvironmentIds(toListString(domain.environmentIds()));
+        entity.setAccountIds(toListString(domain.accountIds()));
+        entity.setRegions(toListString(domain.regions()));
+        entity.setServices(toListString(domain.services()));
+        entity.setStatus(domain.status());
+        entity.setProgressPercent(domain.progressPercent());
+        entity.setAccountsTotal(domain.accountsTotal());
+        entity.setAccountsCompleted(domain.accountsCompleted());
+        entity.setCertificatesDiscovered(domain.certificatesDiscovered());
+        entity.setCreatedAt(domain.createdAt());
+        entity.setUpdatedAt(domain.updatedAt());
         return entity;
     }
 
     private Scan toDomain(ScanEntity entity) {
         if (entity == null) return null;
-        Scan scan = new Scan();
-        scan.setId(entity.getId());
-        scan.setName(entity.getName());
-        scan.setScopeType(entity.getScopeType());
-        scan.setProviderIds(fromStringList(entity.getProviderIds()));
-        scan.setEnvironmentIds(fromStringList(entity.getEnvironmentIds()));
-        scan.setAccountIds(fromStringList(entity.getAccountIds()));
-        scan.setRegions(fromStringList(entity.getRegions()));
-        scan.setServices(fromStringList(entity.getServices()));
-        scan.setStatus(entity.getStatus());
-        scan.setProgressPercent(entity.getProgressPercent());
-        scan.setAccountsTotal(entity.getAccountsTotal());
-        scan.setAccountsCompleted(entity.getAccountsCompleted());
-        scan.setCertificatesDiscovered(entity.getCertificatesDiscovered());
-        scan.setCreatedAt(entity.getCreatedAt());
-        scan.setUpdatedAt(entity.getUpdatedAt());
-        return scan;
+        return Scan.builder()
+                .id(entity.getId())
+                .name(entity.getName())
+                .scopeType(entity.getScopeType())
+                .providerIds(fromStringList(entity.getProviderIds()))
+                .environmentIds(fromStringList(entity.getEnvironmentIds()))
+                .accountIds(fromStringList(entity.getAccountIds()))
+                .regions(fromStringList(entity.getRegions()))
+                .services(fromStringList(entity.getServices()))
+                .status(entity.getStatus())
+                .progressPercent(entity.getProgressPercent())
+                .accountsTotal(entity.getAccountsTotal())
+                .accountsCompleted(entity.getAccountsCompleted())
+                .certificatesDiscovered(entity.getCertificatesDiscovered())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
     }
 
     private String toListString(List<String> list) {

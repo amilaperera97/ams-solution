@@ -52,36 +52,36 @@ public abstract class AbstractAwsDiscoveryStrategy extends AbstractDiscoveryStra
 
     @Override
     protected String effectiveRegion(ScanContext context) {
-        return clientFactory.resolveRegion(context.getAccount(), context.getRegion());
+        return clientFactory.resolveRegion(context.account(), context.region());
     }
 
     /** {@code try (var elb = client(ElasticLoadBalancingV2Client::builder, context))} */
     protected <B extends AwsClientBuilder<B, C>, C> C client(Supplier<B> builderSupplier, ScanContext context) {
-        return clientFactory.client(builderSupplier, context.getAccount(), effectiveRegion(context));
+        return clientFactory.client(builderSupplier, context.account(), effectiveRegion(context));
     }
 
     @Override
-    protected void handleLiveFailure(ScanContext context, DiscoveryResult result, Exception e) {
+    protected void handleLiveFailure(ScanContext context, DiscoveryResult.Accumulator result, Exception e) {
         String code = errorCodeOf(e);
-        String accountId = context.getAccount() != null ? context.getAccount().getId() : "unknown";
+        String accountId = context.accountId() != null ? context.accountId() : "unknown";
 
         if (isDenied(code, e)) {
             // Not a fault: the credentials simply are not allowed to read this service.
             log.info("{} discovery skipped for account {} in {}: access denied",
-                    descriptor().key(), accountId, result.getRegion());
+                    descriptor().key(), accountId, result.region());
             result.skipped("The account's credentials are not allowed to read "
                     + descriptor().label() + "." + permissionHint());
             return;
         }
         if (isThrottled(code)) {
-            log.warn("{} discovery throttled for account {} in {}", descriptor().key(), accountId, result.getRegion());
+            log.warn("{} discovery throttled for account {} in {}", descriptor().key(), accountId, result.region());
+            result.addError(rootMessage(e));
             result.partial("AWS throttled " + descriptor().label()
                     + " discovery; results for this region may be incomplete.");
-            result.addError(rootMessage(e));
             return;
         }
         log.warn("{} discovery failed for account {} in {}: {}",
-                descriptor().key(), accountId, result.getRegion(), e.getMessage());
+                descriptor().key(), accountId, result.region(), e.getMessage());
         result.failed(rootMessage(e));
     }
 
@@ -115,17 +115,16 @@ public abstract class AbstractAwsDiscoveryStrategy extends AbstractDiscoveryStra
 
     // --- shared certificate assembly ----------------------------------------
 
-    /** A certificate stamped with this task's provenance; callers fill in the rest. */
-    protected Certificate newCertificate(ScanContext context, String sourceType) {
-        Certificate certificate = new Certificate();
-        certificate.setId("cert-" + UUID.randomUUID());
-        certificate.setProvider(CloudProviderType.AWS.name());
-        certificate.setAccountId(context.getAccount() != null ? context.getAccount().getId() : null);
-        certificate.setRegion(effectiveRegion(context));
-        certificate.setService(descriptor().key());
-        certificate.setSourceType(sourceType);
-        certificate.setCreatedAt(Instant.now());
-        return certificate;
+    /** A certificate builder stamped with this task's provenance; callers fill in the rest. */
+    protected Certificate.Builder newCertificate(ScanContext context, String sourceType) {
+        return Certificate.builder()
+                .id("cert-" + UUID.randomUUID())
+                .provider(CloudProviderType.AWS.name())
+                .accountId(context.accountId())
+                .region(effectiveRegion(context))
+                .service(descriptor().key())
+                .sourceType(sourceType)
+                .createdAt(Instant.now());
     }
 
     /**
@@ -134,19 +133,19 @@ public abstract class AbstractAwsDiscoveryStrategy extends AbstractDiscoveryStra
      */
     protected CertificateUsage usage(ScanContext context, String service, String resourceArn,
                                      String resourceType, String usageType) {
-        CertificateUsage usage = new CertificateUsage();
-        usage.setService(service);
-        usage.setResource(resourceArn);
-        usage.setResourceType(resourceType);
-        usage.setUsageType(usageType);
-        usage.setRegion(effectiveRegion(context));
-        usage.setAccount(context.getAccount() != null ? context.getAccount().getId() : null);
-        return usage;
+        return CertificateUsage.builder()
+                .service(service)
+                .resource(resourceArn)
+                .resourceType(resourceType)
+                .usageType(usageType)
+                .region(effectiveRegion(context))
+                .account(context.accountId())
+                .build();
     }
 
     /** Stops a runaway account from filling the database; paired with the per-service cap. */
-    protected boolean overResourceLimit(ScanContext context, int seen, DiscoveryResult result) {
-        int limit = context.getOptions().maxResourcesPerService();
+    protected boolean overResourceLimit(ScanContext context, int seen, DiscoveryResult.Accumulator result) {
+        int limit = context.options().maxResourcesPerService();
         if (seen < limit) return false;
         result.addError("Stopped after " + limit + " resources (certificate-discovery.options.max-resources-per-service)");
         return true;

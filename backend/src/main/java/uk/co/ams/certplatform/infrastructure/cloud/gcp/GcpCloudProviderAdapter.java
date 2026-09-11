@@ -26,14 +26,14 @@ public class GcpCloudProviderAdapter implements CloudProviderAdapter {
         // Only AWS has a live implementation so far. Say so rather than reporting a
         // simulated success against what the operator believes is a real account.
         if (properties.isReal(CloudProviderType.GCP)) {
-            return new ConnectionTestResult("FAILED", CloudProviderType.GCP, account.getAccountId(),
+            return ConnectionTestResult.failed(CloudProviderType.GCP, account.accountId(),
                     "REAL mode is not implemented for GCP yet; only AWS can be verified live.");
         }
-        if (account.getToken() != null && !account.getToken().isBlank()) {
-             return new ConnectionTestResult("CONNECTED", CloudProviderType.GCP, account.getAccountId(),
+        if (account.token() != null && !account.token().isBlank()) {
+             return ConnectionTestResult.connected(CloudProviderType.GCP, account.accountId(),
                      "Connection successful (simulated - provider mode is MOCK)");
         }
-        return new ConnectionTestResult("FAILED", CloudProviderType.GCP, account.getAccountId(), "Unable to authenticate with cloud provider");
+        return ConnectionTestResult.failed(CloudProviderType.GCP, account.accountId(), "Unable to authenticate with cloud provider");
     }
 
 }

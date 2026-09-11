@@ -30,9 +30,7 @@ class DiscoveryTaskPlannerTest {
                         .phase(2).notImplemented().build())));
         planner = new DiscoveryTaskPlanner(registry);
 
-        account = new Account();
-        account.setId("acc-1");
-        account.setRegion("eu-west-2");
+        account = Account.builder().id("acc-1").region("eu-west-2").build();
     }
 
     @Test
@@ -106,8 +104,7 @@ class DiscoveryTaskPlannerTest {
 
     @Test
     void leavesTheRegionUnsetWhenNeitherTheScanNorTheAccountNamesOne() {
-        Account regionless = new Account();
-        regionless.setId("acc-2");
+        Account regionless = Account.builder().id("acc-2").build();
 
         DiscoveryTaskPlanner.Plan plan = planner.plan(
                 List.of(new DiscoveryTaskPlanner.AccountTarget(regionless, CloudProviderType.AWS)),

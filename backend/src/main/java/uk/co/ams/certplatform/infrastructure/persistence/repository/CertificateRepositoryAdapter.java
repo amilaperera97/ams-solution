@@ -2,6 +2,8 @@ package uk.co.ams.certplatform.infrastructure.persistence.repository;
 
 import uk.co.ams.certplatform.application.port.CertificateRepositoryPort;
 import uk.co.ams.certplatform.domain.model.Certificate;
+import uk.co.ams.certplatform.domain.model.CertificateUsage;
+import uk.co.ams.certplatform.domain.model.ResourceTag;
 import uk.co.ams.certplatform.infrastructure.persistence.entity.CertificateEntity;
 import org.springframework.stereotype.Component;
 
@@ -21,13 +23,12 @@ public class CertificateRepositoryAdapter implements CertificateRepositoryPort {
 
     @Override
     public Certificate save(Certificate certificate) {
-        if (certificate.getId() == null) {
-            certificate.setId("cert-" + UUID.randomUUID().toString());
-        }
-        if (certificate.getCreatedAt() == null) {
-            certificate.setCreatedAt(Instant.now());
-        }
-        CertificateEntity entity = toEntity(certificate);
+        Certificate toSave = certificate.toBuilder()
+                .id(certificate.id() != null ? certificate.id() : "cert-" + UUID.randomUUID())
+                .createdAt(certificate.createdAt() != null ? certificate.createdAt() : Instant.now())
+                .build();
+
+        CertificateEntity entity = toEntity(toSave);
         CertificateEntity savedEntity = jpaRepository.save(entity);
         return toDomain(savedEntity);
     }
@@ -59,39 +60,39 @@ public class CertificateRepositoryAdapter implements CertificateRepositoryPort {
     private CertificateEntity toEntity(Certificate domain) {
         if (domain == null) return null;
         CertificateEntity entity = new CertificateEntity();
-        entity.setId(domain.getId());
-        entity.setScanId(domain.getScanId());
-        entity.setProvider(domain.getProvider());
-        entity.setAccountId(domain.getAccountId());
-        entity.setRegion(domain.getRegion());
+        entity.setId(domain.id());
+        entity.setScanId(domain.scanId());
+        entity.setProvider(domain.provider());
+        entity.setAccountId(domain.accountId());
+        entity.setRegion(domain.region());
         // domain, status and environment are NOT NULL in the schema, but a certificate
         // read off a disk may legitimately have no CN and no SAN. Substituting a marker
         // keeps the record - and the resource it was found on - rather than failing the
         // insert and taking every other certificate in the batch down with it.
-        entity.setDomain(orUnknown(domain.getDomain()));
-        entity.setStatus(orUnknown(domain.getStatus()));
-        entity.setEnvironment(orUnassigned(domain.getEnvironment()));
-        entity.setService(domain.getService());
-        entity.setResource(domain.getResource());
-        entity.setIssuedDate(domain.getIssuedDate());
-        entity.setExpiryDate(domain.getExpiryDate());
-        entity.setIssuer(domain.getIssuer());
-        entity.setAlgorithm(domain.getAlgorithm());
-        entity.setAutoRenewal(domain.getAutoRenewal());
-        entity.setCreatedAt(domain.getCreatedAt());
+        entity.setDomain(orUnknown(domain.domain()));
+        entity.setStatus(orUnknown(domain.status()));
+        entity.setEnvironment(orUnassigned(domain.environment()));
+        entity.setService(domain.service());
+        entity.setResource(domain.resource());
+        entity.setIssuedDate(domain.issuedDate());
+        entity.setExpiryDate(domain.expiryDate());
+        entity.setIssuer(domain.issuer());
+        entity.setAlgorithm(domain.algorithm());
+        entity.setAutoRenewal(domain.autoRenewal());
+        entity.setCreatedAt(domain.createdAt());
         
-        entity.setFingerprint(domain.getFingerprint());
-        entity.setSerialNumber(domain.getSerialNumber());
-        entity.setSubject(domain.getSubject());
-        entity.setSourceType(domain.getSourceType());
-        entity.setKeySize(domain.getKeySize());
+        entity.setFingerprint(domain.fingerprint());
+        entity.setSerialNumber(domain.serialNumber());
+        entity.setSubject(domain.subject());
+        entity.setSourceType(domain.sourceType());
+        entity.setKeySize(domain.keySize());
 
         try {
-            if (!domain.getUsages().isEmpty()) {
-                entity.setUsagesJson(objectMapper.writeValueAsString(domain.getUsages()));
+            if (!domain.usages().isEmpty()) {
+                entity.setUsagesJson(objectMapper.writeValueAsString(domain.usages()));
             }
-            if (!domain.getTags().isEmpty()) {
-                entity.setTagsJson(objectMapper.writeValueAsString(domain.getTags()));
+            if (!domain.tags().isEmpty()) {
+                entity.setTagsJson(objectMapper.writeValueAsString(domain.tags()));
             }
         } catch (Exception e) {
             throw new RuntimeException("Failed to serialize certificate metadata", e);
@@ -110,45 +111,42 @@ public class CertificateRepositoryAdapter implements CertificateRepositoryPort {
 
     private Certificate toDomain(CertificateEntity entity) {
         if (entity == null) return null;
-        Certificate cert = new Certificate();
-        cert.setId(entity.getId());
-        cert.setScanId(entity.getScanId());
-        cert.setProvider(entity.getProvider());
-        cert.setAccountId(entity.getAccountId());
-        cert.setEnvironment(entity.getEnvironment());
-        cert.setRegion(entity.getRegion());
-        cert.setDomain(entity.getDomain());
-        cert.setStatus(entity.getStatus());
-        cert.setService(entity.getService());
-        cert.setResource(entity.getResource());
-        cert.setIssuedDate(entity.getIssuedDate());
-        cert.setExpiryDate(entity.getExpiryDate());
-        cert.setIssuer(entity.getIssuer());
-        cert.setAlgorithm(entity.getAlgorithm());
-        cert.setAutoRenewal(entity.getAutoRenewal());
-        cert.setCreatedAt(entity.getCreatedAt());
-
-        cert.setFingerprint(entity.getFingerprint());
-        cert.setSerialNumber(entity.getSerialNumber());
-        cert.setSubject(entity.getSubject());
-        cert.setSourceType(entity.getSourceType());
-        cert.setKeySize(entity.getKeySize());
+        Certificate.Builder cert = Certificate.builder()
+                .id(entity.getId())
+                .scanId(entity.getScanId())
+                .provider(entity.getProvider())
+                .accountId(entity.getAccountId())
+                .environment(entity.getEnvironment())
+                .region(entity.getRegion())
+                .domain(entity.getDomain())
+                .status(entity.getStatus())
+                .service(entity.getService())
+                .resource(entity.getResource())
+                .issuedDate(entity.getIssuedDate())
+                .expiryDate(entity.getExpiryDate())
+                .issuer(entity.getIssuer())
+                .algorithm(entity.getAlgorithm())
+                .autoRenewal(entity.getAutoRenewal())
+                .createdAt(entity.getCreatedAt())
+                .fingerprint(entity.getFingerprint())
+                .serialNumber(entity.getSerialNumber())
+                .subject(entity.getSubject())
+                .sourceType(entity.getSourceType())
+                .keySize(entity.getKeySize());
 
         try {
             if (entity.getUsagesJson() != null) {
-                java.util.List<uk.co.ams.certplatform.domain.model.CertificateUsage> usages = 
-                        objectMapper.readValue(entity.getUsagesJson(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
-                usages.forEach(cert::addUsage);
+                cert.usages(objectMapper.readValue(entity.getUsagesJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<CertificateUsage>>() {}));
             }
             if (entity.getTagsJson() != null) {
-                java.util.List<uk.co.ams.certplatform.domain.model.ResourceTag> tags = 
-                        objectMapper.readValue(entity.getTagsJson(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
-                tags.forEach(cert::addTag);
+                cert.tags(objectMapper.readValue(entity.getTagsJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<ResourceTag>>() {}));
             }
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize certificate metadata", e);
         }
 
-        return cert;
+        return cert.build();
     }
 }

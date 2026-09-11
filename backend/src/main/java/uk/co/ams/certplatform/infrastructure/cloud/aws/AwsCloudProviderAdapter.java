@@ -47,30 +47,30 @@ public class AwsCloudProviderAdapter implements CloudProviderAdapter {
         try (StsClient sts = clientFactory.stsClient(account, region)) {
             GetCallerIdentityResponse identity = sts.getCallerIdentity();
 
-            if (account.getAccountId() != null && !account.getAccountId().equals(identity.account())) {
-                return new ConnectionTestResult("FAILED", CloudProviderType.AWS, account.getAccountId(),
+            if (account.accountId() != null && !account.accountId().equals(identity.account())) {
+                return ConnectionTestResult.failed(CloudProviderType.AWS, account.accountId(),
                         "Credentials are valid but belong to AWS account " + identity.account()
-                        + ", not " + account.getAccountId());
+                        + ", not " + account.accountId());
             }
-            return new ConnectionTestResult("CONNECTED", CloudProviderType.AWS, identity.account(),
+            return ConnectionTestResult.connected(CloudProviderType.AWS, identity.account(),
                     "Authenticated as " + identity.arn() + " in " + region);
         } catch (SdkException e) {
-            log.warn("STS GetCallerIdentity failed for account {} in {}: {}", account.getId(), region, e.getMessage());
-            return new ConnectionTestResult("FAILED", CloudProviderType.AWS, account.getAccountId(),
+            log.warn("STS GetCallerIdentity failed for account {} in {}: {}", account.id(), region, e.getMessage());
+            return ConnectionTestResult.failed(CloudProviderType.AWS, account.accountId(),
                     "AWS rejected the credentials: " + rootMessage(e));
         } catch (RuntimeException e) {
-            log.warn("Connection test could not run for account {}: {}", account.getId(), e.getMessage());
-            return new ConnectionTestResult("FAILED", CloudProviderType.AWS, account.getAccountId(), rootMessage(e));
+            log.warn("Connection test could not run for account {}: {}", account.id(), e.getMessage());
+            return ConnectionTestResult.failed(CloudProviderType.AWS, account.accountId(), rootMessage(e));
         }
     }
 
     /** Shape-only check used by the dev profile, where no real AWS account exists. */
     private ConnectionTestResult testConnectionSimulated(Account account) {
-        if (account.getAccountId() != null && account.getAccountId().length() == 12) {
-            return new ConnectionTestResult("CONNECTED", CloudProviderType.AWS, account.getAccountId(),
+        if (account.accountId() != null && account.accountId().length() == 12) {
+            return ConnectionTestResult.connected(CloudProviderType.AWS, account.accountId(),
                     "Connection successful (simulated - provider mode is MOCK)");
         }
-        return new ConnectionTestResult("FAILED", CloudProviderType.AWS, account.getAccountId(),
+        return ConnectionTestResult.failed(CloudProviderType.AWS, account.accountId(),
                 "Unable to authenticate with cloud provider");
     }
 

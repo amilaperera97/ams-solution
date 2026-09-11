@@ -2,27 +2,23 @@ package uk.co.ams.certplatform.api.controller;
 
 import uk.co.ams.certplatform.domain.model.Scan;
 
-public class ScanStatusResponse {
-    private String scanId;
-    private String status;
-    private int progressPercent;
-    private int accountsTotal;
-    private int accountsCompleted;
-    private int certificatesDiscovered;
+/** The slice of a scan the UI polls while it is running. */
+public record ScanStatusResponse(
+        String scanId,
+        String status,
+        int progressPercent,
+        int accountsTotal,
+        int accountsCompleted,
+        int certificatesDiscovered
+) {
 
-    public ScanStatusResponse(Scan scan) {
-        this.scanId = scan.getId();
-        this.status = scan.getStatus().name();
-        this.progressPercent = scan.getProgressPercent();
-        this.accountsTotal = scan.getAccountsTotal();
-        this.accountsCompleted = scan.getAccountsCompleted();
-        this.certificatesDiscovered = scan.getCertificatesDiscovered();
+    public static ScanStatusResponse from(Scan scan) {
+        return new ScanStatusResponse(
+                scan.id(),
+                scan.status().name(),
+                scan.progressPercent(),
+                scan.accountsTotal(),
+                scan.accountsCompleted(),
+                scan.certificatesDiscovered());
     }
-
-    public String getScanId() { return scanId; }
-    public String getStatus() { return status; }
-    public int getProgressPercent() { return progressPercent; }
-    public int getAccountsTotal() { return accountsTotal; }
-    public int getAccountsCompleted() { return accountsCompleted; }
-    public int getCertificatesDiscovered() { return certificatesDiscovered; }
 }

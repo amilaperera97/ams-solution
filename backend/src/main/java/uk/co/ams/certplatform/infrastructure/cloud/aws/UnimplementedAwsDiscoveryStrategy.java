@@ -26,14 +26,14 @@ public abstract class UnimplementedAwsDiscoveryStrategy extends AbstractAwsDisco
     }
 
     @Override
-    protected final void discoverLive(ScanContext context, DiscoveryResult result) {
+    protected final void discoverLive(ScanContext context, DiscoveryResult.Accumulator result) {
         // Unreachable: AbstractDiscoveryStrategy short-circuits on descriptor().implemented().
         result.notImplemented(descriptor().label() + " discovery is not implemented yet.");
     }
 
     /** MOCK mode must not invent data for a service that does not exist yet either. */
     @Override
-    protected final void simulate(ScanContext context, DiscoveryResult result) {
+    protected final void simulate(ScanContext context, DiscoveryResult.Accumulator result) {
         result.notImplemented(descriptor().label() + " discovery is not implemented yet.");
     }
 }

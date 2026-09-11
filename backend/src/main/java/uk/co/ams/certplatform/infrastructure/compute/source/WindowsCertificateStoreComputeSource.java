@@ -74,12 +74,12 @@ public class WindowsCertificateStoreComputeSource implements ComputeCertificateS
     public List<Certificate> parse(ScanContext context, ComputeCommandResult result) {
         List<Certificate> certificates = new ArrayList<>();
         for (ComputeOutput.Record record : ComputeOutput.parse(result.stdout())) {
-            parser.fromBase64Der(record.base64Der()).ifPresent(certificate -> {
-                certificate.setSourceType(name());
-                certificate.setResource(record.location());
-                certificate.addTag(new ResourceTag("windows:store", record.location()));
-                certificates.add(certificate);
-            });
+            parser.fromBase64Der(record.base64Der()).ifPresent(certificate -> certificates.add(
+                    certificate.toBuilder()
+                            .sourceType(name())
+                            .resource(record.location())
+                            .tag(new ResourceTag("windows:store", record.location()))
+                            .build()));
         }
         return certificates;
     }

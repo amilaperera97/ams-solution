@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest;
 import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.ec2.model.Reservation;
+import software.amazon.awssdk.services.ec2.model.Tag;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.DescribeInstanceInformationRequest;
 import software.amazon.awssdk.services.ssm.model.GetCommandInvocationRequest;
@@ -88,7 +89,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
         int limit = properties.getCompute().getMaxTargetsPerRegion();
         Map<String, ComputeTarget> byInstanceId = new LinkedHashMap<>();
 
-        try (SsmClient ssm = clientFactory.client(SsmClient::builder, context.getAccount(), context.getRegion())) {
+        try (SsmClient ssm = clientFactory.client(SsmClient::builder, context.account(), context.region())) {
             // Only Online instances are worth a command; anything else would just
             // sit in Pending until the invocation timed out.
             for (InstanceInformation information : ssm.describeInstanceInformationPaginator(
@@ -99,14 +100,14 @@ public class SsmComputeExecutor implements ComputeExecutor {
 
                 if (byInstanceId.size() >= limit) {
                     log.info("Reached the {} target cap for account {} in {}; remaining instances were not scanned",
-                            limit, context.getAccount().getId(), context.getRegion());
+                            limit, context.accountId(), context.region());
                     break;
                 }
                 byInstanceId.put(information.instanceId(), toTarget(information));
             }
         } catch (SdkException e) {
             log.warn("Could not list SSM-managed instances for account {} in {}: {}",
-                    context.getAccount().getId(), context.getRegion(), e.getMessage());
+                    context.accountId(), context.region(), e.getMessage());
             return List.of();
         }
 
@@ -115,17 +116,17 @@ public class SsmComputeExecutor implements ComputeExecutor {
     }
 
     private ComputeTarget toTarget(InstanceInformation information) {
-        ComputeTarget target = new ComputeTarget(information.instanceId(),
-                OsFamily.from(information.platformTypeAsString()));
-        target.setService("EC2");
-        target.setName(information.computerName());
+        OperatingSystemMetadata os = OperatingSystemMetadata.of(
+                String.valueOf(information.platformTypeAsString()).toUpperCase(),
+                information.platformName(),
+                information.platformVersion());
 
-        OperatingSystemMetadata os = new OperatingSystemMetadata();
-        os.setFamily(String.valueOf(information.platformTypeAsString()).toUpperCase());
-        os.setName(information.platformName());
-        os.setVersion(information.platformVersion());
-        target.setOs(os);
-        return target;
+        return ComputeTarget.builder(information.instanceId())
+                .osFamily(OsFamily.from(information.platformTypeAsString()))
+                .service("EC2")
+                .name(information.computerName())
+                .os(os)
+                .build();
     }
 
     /**
@@ -137,7 +138,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
         if (byInstanceId.isEmpty()) return;
 
         List<String> instanceIds = new ArrayList<>(byInstanceId.keySet());
-        try (Ec2Client ec2 = clientFactory.client(Ec2Client::builder, context.getAccount(), context.getRegion())) {
+        try (Ec2Client ec2 = clientFactory.client(Ec2Client::builder, context.account(), context.region())) {
             for (int start = 0; start < instanceIds.size(); start += DESCRIBE_BATCH_SIZE) {
                 List<String> batch = instanceIds.subList(start,
                         Math.min(start + DESCRIBE_BATCH_SIZE, instanceIds.size()));
@@ -147,11 +148,13 @@ public class SsmComputeExecutor implements ComputeExecutor {
                     for (Instance instance : reservation.instances()) {
                         ComputeTarget target = byInstanceId.get(instance.instanceId());
                         if (target == null) continue;
-                        target.setResourceArn(instance.instanceId());
-                        instance.tags().forEach(tag -> {
-                            target.addTag(new ResourceTag(tag.key(), tag.value()));
-                            if ("Name".equals(tag.key())) target.setName(tag.value());
-                        });
+
+                        target = target.withResourceArn(instance.instanceId());
+                        for (Tag tag : instance.tags()) {
+                            target = target.withTag(new ResourceTag(tag.key(), tag.value()));
+                            if ("Name".equals(tag.key())) target = target.withName(tag.value());
+                        }
+                        byInstanceId.put(instance.instanceId(), target);
                     }
                 }
             }
@@ -168,7 +171,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
         Map<String, ComputeCommandResult> byInstanceId = new HashMap<>();
         if (targets.isEmpty()) return List.of();
 
-        try (SsmClient ssm = clientFactory.client(SsmClient::builder, context.getAccount(), context.getRegion())) {
+        try (SsmClient ssm = clientFactory.client(SsmClient::builder, context.account(), context.region())) {
             for (int start = 0; start < targets.size(); start += SEND_BATCH_SIZE) {
                 List<ComputeTarget> batch = targets.subList(start,
                         Math.min(start + SEND_BATCH_SIZE, targets.size()));
@@ -176,13 +179,13 @@ public class SsmComputeExecutor implements ComputeExecutor {
             }
         } catch (SdkException e) {
             log.warn("SSM Run Command failed for account {} in {}: {}",
-                    context.getAccount().getId(), context.getRegion(), e.getMessage());
+                    context.accountId(), context.region(), e.getMessage());
         }
 
         // One result per requested target, in the order asked for.
         List<ComputeCommandResult> results = new ArrayList<>(targets.size());
         for (ComputeTarget target : targets) {
-            results.add(byInstanceId.getOrDefault(target.getId(),
+            results.add(byInstanceId.getOrDefault(target.id(),
                     ComputeCommandResult.failure(target, "No SSM invocation result was returned")));
         }
         return results;
@@ -190,7 +193,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
 
     private void runBatch(SsmClient ssm, List<ComputeTarget> batch, ComputeCommand command,
                           Map<String, ComputeCommandResult> byInstanceId) {
-        List<String> instanceIds = batch.stream().map(ComputeTarget::getId).toList();
+        List<String> instanceIds = batch.stream().map(ComputeTarget::id).toList();
         String document = command.osFamily() == OsFamily.WINDOWS ? WINDOWS_DOCUMENT : LINUX_DOCUMENT;
         long timeoutSeconds = command.timeout().getSeconds();
 
@@ -205,7 +208,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
                     .build());
         } catch (SdkException e) {
             log.warn("SSM SendCommand rejected for {} instance(s): {}", instanceIds.size(), e.getMessage());
-            batch.forEach(target -> byInstanceId.put(target.getId(),
+            batch.forEach(target -> byInstanceId.put(target.id(),
                     ComputeCommandResult.failure(target, "SendCommand failed: " + e.getMessage())));
             return;
         }
@@ -213,7 +216,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
         String commandId = sent.command().commandId();
         Instant deadline = Instant.now().plus(command.timeout());
         for (ComputeTarget target : batch) {
-            byInstanceId.put(target.getId(), awaitInvocation(ssm, commandId, target, deadline));
+            byInstanceId.put(target.id(), awaitInvocation(ssm, commandId, target, deadline));
         }
     }
 
@@ -229,7 +232,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
                 GetCommandInvocationResponse invocation = ssm.getCommandInvocation(
                         GetCommandInvocationRequest.builder()
                                 .commandId(commandId)
-                                .instanceId(target.getId())
+                                .instanceId(target.id())
                                 .build());
 
                 String status = invocation.statusAsString();
@@ -239,7 +242,7 @@ public class SsmComputeExecutor implements ComputeExecutor {
                     boolean truncated = stdout.length() >= OUTPUT_LIMIT_BYTES;
                     if (truncated) {
                         log.info("Output from {} was truncated at the SSM limit; results may be incomplete",
-                                target.getId());
+                                target.id());
                     }
                     return new ComputeCommandResult(target, "Success".equals(status), stdout,
                             invocation.standardErrorContent(), truncated);

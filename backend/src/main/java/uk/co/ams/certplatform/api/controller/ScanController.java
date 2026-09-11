@@ -46,7 +46,7 @@ public class ScanController {
     @GetMapping("/{id}/status")
     public ResponseEntity<?> getScanStatus(@PathVariable String id) {
         return scanService.getScan(id)
-                .map(scan -> ResponseEntity.ok().body(new ScanStatusResponse(scan)))
+                .map(scan -> ResponseEntity.ok(ScanStatusResponse.from(scan)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 

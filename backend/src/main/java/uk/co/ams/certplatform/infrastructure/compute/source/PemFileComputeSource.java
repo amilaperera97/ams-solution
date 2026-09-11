@@ -79,12 +79,12 @@ public class PemFileComputeSource implements ComputeCertificateSource {
     public List<Certificate> parse(ScanContext context, ComputeCommandResult result) {
         List<Certificate> certificates = new ArrayList<>();
         for (ComputeOutput.Record record : ComputeOutput.parse(result.stdout())) {
-            parser.fromBase64Der(record.base64Der()).ifPresent(certificate -> {
-                certificate.setSourceType(name());
-                certificate.setResource(record.location());
-                certificate.addTag(new ResourceTag("file:path", record.location()));
-                certificates.add(certificate);
-            });
+            parser.fromBase64Der(record.base64Der()).ifPresent(certificate -> certificates.add(
+                    certificate.toBuilder()
+                            .sourceType(name())
+                            .resource(record.location())
+                            .tag(new ResourceTag("file:path", record.location()))
+                            .build()));
         }
         return certificates;
     }

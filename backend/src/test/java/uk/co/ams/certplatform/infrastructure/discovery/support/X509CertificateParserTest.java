@@ -51,20 +51,20 @@ class X509CertificateParserTest {
     void readsEveryFieldTheInventoryNeeds() {
         Certificate certificate = parser.leafOf(PEM).orElseThrow();
 
-        assertEquals("discovery-test.example.com", certificate.getDomain());
-        assertEquals(EXPECTED_SERIAL, certificate.getSerialNumber());
-        assertEquals("RSA", certificate.getAlgorithm());
-        assertEquals(2048, certificate.getKeySize());
-        assertEquals("VALID", certificate.getStatus());
-        assertTrue(certificate.getSubject().contains("discovery-test.example.com"));
-        assertTrue(certificate.getExpiryDate().isAfter(certificate.getIssuedDate()));
+        assertEquals("discovery-test.example.com", certificate.domain());
+        assertEquals(EXPECTED_SERIAL, certificate.serialNumber());
+        assertEquals("RSA", certificate.algorithm());
+        assertEquals(2048, certificate.keySize());
+        assertEquals("VALID", certificate.status());
+        assertTrue(certificate.subject().contains("discovery-test.example.com"));
+        assertTrue(certificate.expiryDate().isAfter(certificate.issuedDate()));
     }
 
     @Test
     void computesTheSameFingerprintOpensslDoes() {
         // This is the dedupe key. If it drifts, the same certificate found through
         // two services stops merging and the inventory double-counts.
-        assertEquals(EXPECTED_FINGERPRINT, parser.leafOf(PEM).orElseThrow().getFingerprint());
+        assertEquals(EXPECTED_FINGERPRINT, parser.leafOf(PEM).orElseThrow().fingerprint());
     }
 
     @Test
@@ -73,7 +73,7 @@ class X509CertificateParserTest {
                          .replace("-----END CERTIFICATE-----", "")
                          .replaceAll("\\s", "");
 
-        assertEquals(EXPECTED_FINGERPRINT, parser.fromBase64Der(body).orElseThrow().getFingerprint());
+        assertEquals(EXPECTED_FINGERPRINT, parser.fromBase64Der(body).orElseThrow().fingerprint());
     }
 
     @Test
@@ -82,7 +82,7 @@ class X509CertificateParserTest {
         List<Certificate> chain = parser.fromPem(PEM + PEM);
 
         assertEquals(2, chain.size());
-        assertEquals("discovery-test.example.com", parser.leafOf(PEM + PEM).orElseThrow().getDomain());
+        assertEquals("discovery-test.example.com", parser.leafOf(PEM + PEM).orElseThrow().domain());
     }
 
     @Test

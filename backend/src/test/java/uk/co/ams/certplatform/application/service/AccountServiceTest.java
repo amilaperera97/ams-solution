@@ -73,8 +73,7 @@ class AccountServiceTest {
     }
 
     private void stubSave() {
-        Account saved = new Account();
-        saved.setId("acc-123");
+        Account saved = Account.builder().id("acc-123").build();
         when(accountRepositoryPort.save(any(Account.class))).thenReturn(saved);
     }
 
@@ -85,23 +84,24 @@ class AccountServiceTest {
 
     /** An account already in the database, with credentials the client is never shown. */
     private Account storedAccount(AccountAuthType authType) {
-        Account stored = new Account();
-        stored.setId("acc-123");
-        stored.setProviderId(PROVIDER_ID);
-        stored.setEnvironmentId(ENV_ID);
-        stored.setName("QA Account");
-        stored.setAccountId("123456789012");
-        stored.setAuthType(authType);
-        stored.setRegion("eu-west-2");
+        Account.Builder stored = Account.builder()
+                .id("acc-123")
+                .providerId(PROVIDER_ID)
+                .environmentId(ENV_ID)
+                .name("QA Account")
+                .accountId("123456789012")
+                .authType(authType)
+                .region("eu-west-2");
+
         if (authType == AccountAuthType.ACCESS_KEY) {
-            stored.setAccessKeyId("AKIAIOSFODNN7EXAMPLE");
-            stored.setSecretAccessKey("stored-secret");
+            stored.accessKeyId("AKIAIOSFODNN7EXAMPLE").secretAccessKey("stored-secret");
         } else if (authType == AccountAuthType.IAM_ROLE) {
-            stored.setRoleArn("arn:aws:iam::123456789012:role/StoredRole");
-            stored.setExternalId("stored-external-id");
+            stored.roleArn("arn:aws:iam::123456789012:role/StoredRole").externalId("stored-external-id");
         }
-        when(accountRepositoryPort.findById("acc-123")).thenReturn(Optional.of(stored));
-        return stored;
+
+        Account account = stored.build();
+        when(accountRepositoryPort.findById("acc-123")).thenReturn(Optional.of(account));
+        return account;
     }
 
     private Account savedAccount() {
@@ -119,7 +119,7 @@ class AccountServiceTest {
                 new AccountCredentials(null, "arn:aws:iam::123456789012:role/Role", null, null, null, null));
 
         assertNotNull(result);
-        assertEquals("acc-123", result.getId());
+        assertEquals("acc-123", result.id());
         verify(accountRepositoryPort, times(1)).save(any(Account.class));
     }
 
@@ -167,10 +167,10 @@ class AccountServiceTest {
         verify(accountRepositoryPort).save(captor.capture());
         Account persisted = captor.getValue();
 
-        assertEquals("AKIAIOSFODNN7EXAMPLE", persisted.getAccessKeyId());
-        assertEquals("wJalrXUtnFEMI/K7MDENG", persisted.getSecretAccessKey());
-        assertEquals("eu-west-2", persisted.getRegion());
-        assertEquals(AccountAuthType.ACCESS_KEY, persisted.getAuthType());
+        assertEquals("AKIAIOSFODNN7EXAMPLE", persisted.accessKeyId());
+        assertEquals("wJalrXUtnFEMI/K7MDENG", persisted.secretAccessKey());
+        assertEquals("eu-west-2", persisted.region());
+        assertEquals(AccountAuthType.ACCESS_KEY, persisted.authType());
     }
 
     @Test
@@ -237,10 +237,10 @@ class AccountServiceTest {
                         null, null, "eu-west-2"));
 
         Account persisted = savedAccount();
-        assertEquals("arn:aws:iam::123456789012:role/Role", persisted.getRoleArn());
-        assertEquals("ext-123", persisted.getExternalId());
-        assertEquals("eu-west-2", persisted.getRegion());
-        assertNull(persisted.getAccessKeyId(), "IAM_ROLE with no bootstrap keys stores none");
+        assertEquals("arn:aws:iam::123456789012:role/Role", persisted.roleArn());
+        assertEquals("ext-123", persisted.externalId());
+        assertEquals("eu-west-2", persisted.region());
+        assertNull(persisted.accessKeyId(), "IAM_ROLE with no bootstrap keys stores none");
     }
 
     @Test
@@ -275,9 +275,9 @@ class AccountServiceTest {
                         "AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG", "eu-west-2"));
 
         Account persisted = savedAccount();
-        assertEquals(AccountAuthType.IAM_ROLE, persisted.getAuthType());
-        assertEquals("AKIAIOSFODNN7EXAMPLE", persisted.getAccessKeyId());
-        assertEquals("wJalrXUtnFEMI/K7MDENG", persisted.getSecretAccessKey());
+        assertEquals(AccountAuthType.IAM_ROLE, persisted.authType());
+        assertEquals("AKIAIOSFODNN7EXAMPLE", persisted.accessKeyId());
+        assertEquals("wJalrXUtnFEMI/K7MDENG", persisted.secretAccessKey());
     }
 
     @Test
@@ -289,11 +289,11 @@ class AccountServiceTest {
                 new AccountCredentials(null, null, null, null, null, null));
 
         Account persisted = savedAccount();
-        assertEquals("Renamed Account", persisted.getName());
-        assertEquals("123456789012", persisted.getAccountId());
-        assertEquals("AKIAIOSFODNN7EXAMPLE", persisted.getAccessKeyId());
-        assertEquals("stored-secret", persisted.getSecretAccessKey(), "an omitted secret must not be wiped");
-        assertEquals("eu-west-2", persisted.getRegion());
+        assertEquals("Renamed Account", persisted.name());
+        assertEquals("123456789012", persisted.accountId());
+        assertEquals("AKIAIOSFODNN7EXAMPLE", persisted.accessKeyId());
+        assertEquals("stored-secret", persisted.secretAccessKey(), "an omitted secret must not be wiped");
+        assertEquals("eu-west-2", persisted.region());
     }
 
     @Test
@@ -305,9 +305,9 @@ class AccountServiceTest {
                 new AccountCredentials(null, null, null, "AKIAI44QH8DHBEXAMPLE", "  ", "us-east-1"));
 
         Account persisted = savedAccount();
-        assertEquals("AKIAI44QH8DHBEXAMPLE", persisted.getAccessKeyId());
-        assertEquals("stored-secret", persisted.getSecretAccessKey(), "blank means unchanged, not cleared");
-        assertEquals("us-east-1", persisted.getRegion());
+        assertEquals("AKIAI44QH8DHBEXAMPLE", persisted.accessKeyId());
+        assertEquals("stored-secret", persisted.secretAccessKey(), "blank means unchanged, not cleared");
+        assertEquals("us-east-1", persisted.region());
     }
 
     @Test
@@ -319,10 +319,10 @@ class AccountServiceTest {
                 new AccountCredentials(null, null, null, null, null, "us-east-1"));
 
         Account persisted = savedAccount();
-        assertEquals(AccountAuthType.IAM_ROLE, persisted.getAuthType());
-        assertEquals("arn:aws:iam::123456789012:role/StoredRole", persisted.getRoleArn());
-        assertEquals("stored-external-id", persisted.getExternalId());
-        assertEquals("us-east-1", persisted.getRegion());
+        assertEquals(AccountAuthType.IAM_ROLE, persisted.authType());
+        assertEquals("arn:aws:iam::123456789012:role/StoredRole", persisted.roleArn());
+        assertEquals("stored-external-id", persisted.externalId());
+        assertEquals("us-east-1", persisted.region());
     }
 
     @Test

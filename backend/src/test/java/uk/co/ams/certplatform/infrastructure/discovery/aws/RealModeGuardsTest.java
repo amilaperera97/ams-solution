@@ -47,14 +47,14 @@ class RealModeGuardsTest {
     }
 
     private Account realAccount() {
-        Account account = new Account();
-        account.setId("acc-real");
-        account.setAccountId("123456789012");
-        account.setAuthType(AccountAuthType.ACCESS_KEY);
-        account.setAccessKeyId("AKIAIOSFODNN7EXAMPLE");
-        account.setSecretAccessKey("wJalrXUtnFEMI/K7MDENG");
-        account.setRegion("eu-west-2");
-        return account;
+        return Account.builder()
+                .id("acc-real")
+                .accountId("123456789012")
+                .authType(AccountAuthType.ACCESS_KEY)
+                .accessKeyId("AKIAIOSFODNN7EXAMPLE")
+                .secretAccessKey("wJalrXUtnFEMI/K7MDENG")
+                .region("eu-west-2")
+                .build();
     }
 
     private AwsAcmDiscoveryStrategy acmStrategy(CloudProviderProperties properties) {
@@ -68,9 +68,9 @@ class RealModeGuardsTest {
         DiscoveryResult result = acmStrategy(realAwsProperties())
                 .discover(new ScanContext("s1", realAccount(), "eu-west-2", "ACM"));
 
-        assertEquals(DiscoveryStatus.FAILED, result.getStatus());
-        assertTrue(result.getCertificates().isEmpty(), "REAL mode must not invent certificates");
-        assertFalse(result.getErrors().isEmpty(), "the AWS failure should be reported");
+        assertEquals(DiscoveryStatus.FAILED, result.status());
+        assertTrue(result.certificates().isEmpty(), "REAL mode must not invent certificates");
+        assertFalse(result.errors().isEmpty(), "the AWS failure should be reported");
     }
 
     @Test
@@ -85,8 +85,8 @@ class RealModeGuardsTest {
 
         // No compute executor is wired in this unit test, so the scanner reports the
         // gap explicitly. What matters is that nothing was invented.
-        assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.getStatus());
-        assertTrue(result.getCertificates().isEmpty());
+        assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.status());
+        assertTrue(result.certificates().isEmpty());
     }
 
     @Test
@@ -98,8 +98,8 @@ class RealModeGuardsTest {
             DiscoveryResult result = strategy.discover(
                     new ScanContext("s1", realAccount(), "eu-west-2", "SECRETS_MANAGER"));
 
-            assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.getStatus());
-            assertTrue(result.getCertificates().isEmpty());
+            assertEquals(DiscoveryStatus.NOT_IMPLEMENTED, result.status());
+            assertTrue(result.certificates().isEmpty());
         }
     }
 
@@ -110,17 +110,18 @@ class RealModeGuardsTest {
         CloudProviderProperties properties = new CloudProviderProperties();
         properties.setProviders(Map.of("azure", real, "gcp", real));
 
-        Account account = new Account();
-        account.setAccountId("sub-123");
-        account.setToken("a-token-that-would-pass-in-mock-mode");
+        Account account = Account.builder()
+                .accountId("sub-123")
+                .token("a-token-that-would-pass-in-mock-mode")
+                .build();
 
         ConnectionTestResult azure = new AzureCloudProviderAdapter(properties).testConnection(account);
         ConnectionTestResult gcp = new GcpCloudProviderAdapter(properties).testConnection(account);
 
-        assertEquals("FAILED", azure.getStatus());
-        assertEquals("FAILED", gcp.getStatus());
-        assertTrue(azure.getMessage().contains("not implemented"));
-        assertTrue(gcp.getMessage().contains("not implemented"));
+        assertEquals("FAILED", azure.status());
+        assertEquals("FAILED", gcp.status());
+        assertTrue(azure.message().contains("not implemented"));
+        assertTrue(gcp.message().contains("not implemented"));
     }
 
     @Test
@@ -132,9 +133,9 @@ class RealModeGuardsTest {
         DiscoveryResult result = acmStrategy(properties)
                 .discover(new ScanContext("s1", realAccount(), "eu-west-2", "ACM"));
 
-        assertEquals(DiscoveryStatus.SUCCESS, result.getStatus());
-        assertEquals(1, result.getCertificates().size());
-        assertEquals("acm.example.com", result.getCertificates().get(0).getDomain());
+        assertEquals(DiscoveryStatus.SUCCESS, result.status());
+        assertEquals(1, result.certificates().size());
+        assertEquals("acm.example.com", result.certificates().get(0).domain());
     }
 
     @Test
@@ -154,9 +155,9 @@ class RealModeGuardsTest {
             DiscoveryResult result = strategy.discover(
                     new ScanContext("s1", realAccount(), "eu-west-2", strategy.descriptor().key()));
 
-            assertTrue(result.getCertificates().isEmpty(),
+            assertTrue(result.certificates().isEmpty(),
                     strategy.descriptor().key() + " invented certificates in REAL mode");
-            assertNotEquals(DiscoveryStatus.SUCCESS, result.getStatus(),
+            assertNotEquals(DiscoveryStatus.SUCCESS, result.status(),
                     strategy.descriptor().key() + " reported success without reaching AWS");
         }
     }

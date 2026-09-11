@@ -2,41 +2,58 @@ package uk.co.ams.certplatform.domain.model;
 
 import java.time.Instant;
 
-public class Organisation {
-    private String id;
-    private String name;
-    private String description;
-    private String status;
-    private Instant createdAt;
-    private Instant updatedAt;
+/** The top of the ownership tree: providers, environments and accounts all hang off one. */
+public record Organisation(
+        String id,
+        String name,
+        String description,
+        String status,
+        Instant createdAt,
+        Instant updatedAt
+) {
 
-    public Organisation() {
+    public Organisation withId(String id) {
+        return toBuilder().id(id).build();
     }
 
-    public Organisation(String id, String name, String description, String status, Instant createdAt, Instant updatedAt) {
-        this.id = id;
-        this.name = name;
-        this.description = description;
-        this.status = status;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+    public Organisation withStatus(String status) {
+        return toBuilder().status(status).build();
     }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-    
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
-    
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-    
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /** Starting point for a modified copy - the stand-in for the setters this used to have. */
+    public Builder toBuilder() {
+        return new Builder()
+                .id(id)
+                .name(name)
+                .description(description)
+                .status(status)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt);
+    }
+
+    public static final class Builder {
+        private String id;
+        private String name;
+        private String description;
+        private String status;
+        private Instant createdAt;
+        private Instant updatedAt;
+
+        private Builder() {}
+
+        public Builder id(String id) { this.id = id; return this; }
+        public Builder name(String name) { this.name = name; return this; }
+        public Builder description(String description) { this.description = description; return this; }
+        public Builder status(String status) { this.status = status; return this; }
+        public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+        public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
+
+        public Organisation build() {
+            return new Organisation(id, name, description, status, createdAt, updatedAt);
+        }
+    }
 }

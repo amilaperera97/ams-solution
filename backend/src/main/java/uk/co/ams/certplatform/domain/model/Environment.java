@@ -2,51 +2,67 @@ package uk.co.ams.certplatform.domain.model;
 
 import java.time.Instant;
 
-public class Environment {
-    private String id;
-    private String organisationId;
-    private String providerId;
-    private String name;
-    private String description;
-    private String status;
-    private Instant createdAt;
-    private Instant updatedAt;
+/** A deployment stage (prod, staging, ...) that accounts are grouped under. */
+public record Environment(
+        String id,
+        String organisationId,
+        String providerId,
+        String name,
+        String description,
+        String status,
+        Instant createdAt,
+        Instant updatedAt
+) {
 
-    public Environment() {
+    public Environment withId(String id) {
+        return toBuilder().id(id).build();
     }
 
-    public Environment(String id, String organisationId, String providerId, String name, String description, String status, Instant createdAt, Instant updatedAt) {
-        this.id = id;
-        this.organisationId = organisationId;
-        this.providerId = providerId;
-        this.name = name;
-        this.description = description;
-        this.status = status;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+    public Environment withStatus(String status) {
+        return toBuilder().status(status).build();
     }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public static Builder builder() {
+        return new Builder();
+    }
 
-    public String getOrganisationId() { return organisationId; }
-    public void setOrganisationId(String organisationId) { this.organisationId = organisationId; }
+    /** Starting point for a modified copy - the stand-in for the setters this used to have. */
+    public Builder toBuilder() {
+        return new Builder()
+                .id(id)
+                .organisationId(organisationId)
+                .providerId(providerId)
+                .name(name)
+                .description(description)
+                .status(status)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt);
+    }
 
-    public String getProviderId() { return providerId; }
-    public void setProviderId(String providerId) { this.providerId = providerId; }
+    public static final class Builder {
+        private String id;
+        private String organisationId;
+        private String providerId;
+        private String name;
+        private String description;
+        private String status;
+        private Instant createdAt;
+        private Instant updatedAt;
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+        private Builder() {}
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+        public Builder id(String id) { this.id = id; return this; }
+        public Builder organisationId(String organisationId) { this.organisationId = organisationId; return this; }
+        public Builder providerId(String providerId) { this.providerId = providerId; return this; }
+        public Builder name(String name) { this.name = name; return this; }
+        public Builder description(String description) { this.description = description; return this; }
+        public Builder status(String status) { this.status = status; return this; }
+        public Builder createdAt(Instant createdAt) { this.createdAt = createdAt; return this; }
+        public Builder updatedAt(Instant updatedAt) { this.updatedAt = updatedAt; return this; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+        public Environment build() {
+            return new Environment(id, organisationId, providerId, name, description, status,
+                    createdAt, updatedAt);
+        }
+    }
 }

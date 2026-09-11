@@ -19,6 +19,8 @@ import software.amazon.awssdk.services.apigateway.model.GetDomainNamesRequest;
 import software.amazon.awssdk.services.apigatewayv2.ApiGatewayV2Client;
 import software.amazon.awssdk.services.apigatewayv2.model.DomainNameConfiguration;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -61,7 +63,7 @@ public class AwsApiGatewayDiscoveryStrategy extends AbstractAwsDiscoveryStrategy
     }
 
     @Override
-    protected void discoverLive(ScanContext context, DiscoveryResult result) {
+    protected void discoverLive(ScanContext context, DiscoveryResult.Accumulator result) {
         Map<String, Certificate> byArn = new LinkedHashMap<>();
         int domains = collectRestDomains(context, result, byArn) + collectHttpDomains(context, result, byArn);
 
@@ -71,7 +73,7 @@ public class AwsApiGatewayDiscoveryStrategy extends AbstractAwsDiscoveryStrategy
     }
 
     /** REST APIs: the v1 control plane, where a domain may carry both an edge and a regional certificate. */
-    private int collectRestDomains(ScanContext context, DiscoveryResult result, Map<String, Certificate> byArn) {
+    private int collectRestDomains(ScanContext context, DiscoveryResult.Accumulator result, Map<String, Certificate> byArn) {
         int domains = 0;
         try (ApiGatewayClient apiGateway = client(ApiGatewayClient::builder, context)) {
             for (software.amazon.awssdk.services.apigateway.model.DomainName domain :
@@ -89,7 +91,7 @@ public class AwsApiGatewayDiscoveryStrategy extends AbstractAwsDiscoveryStrategy
     }
 
     /** HTTP and WebSocket APIs: the v2 control plane, one configuration per endpoint type. */
-    private int collectHttpDomains(ScanContext context, DiscoveryResult result, Map<String, Certificate> byArn) {
+    private int collectHttpDomains(ScanContext context, DiscoveryResult.Accumulator result, Map<String, Certificate> byArn) {
         int domains = 0;
         try (ApiGatewayV2Client apiGateway = client(ApiGatewayV2Client::builder, context)) {
             String nextToken = null;
@@ -122,12 +124,14 @@ public class AwsApiGatewayDiscoveryStrategy extends AbstractAwsDiscoveryStrategy
                 resolver.resolve(context, arn)
                         .orElseGet(() -> resolver.unresolved(context, arn, descriptor().key())));
 
-        CertificateUsage usage = usage(context, descriptor().key(), certificateArn, "Custom domain", "ATTACHED");
-        usage.setResource(domainName);
-        certificate.addUsage(usage);
+        // The domain, not the certificate, is what the usage points at.
+        CertificateUsage usage = usage(context, descriptor().key(), domainName, "Custom domain", "ATTACHED");
 
-        certificate.addTag(new ResourceTag("apigateway:domainName", domainName));
-        if (endpointType != null) certificate.addTag(new ResourceTag("apigateway:endpointType", endpointType));
-        if (tags != null) tags.forEach((key, value) -> certificate.addTag(new ResourceTag(key, value)));
+        List<ResourceTag> resourceTags = new ArrayList<>();
+        resourceTags.add(new ResourceTag("apigateway:domainName", domainName));
+        if (endpointType != null) resourceTags.add(new ResourceTag("apigateway:endpointType", endpointType));
+        if (tags != null) tags.forEach((key, value) -> resourceTags.add(new ResourceTag(key, value)));
+
+        byArn.put(certificateArn, certificate.withUsage(usage).withTags(resourceTags));
     }
 }

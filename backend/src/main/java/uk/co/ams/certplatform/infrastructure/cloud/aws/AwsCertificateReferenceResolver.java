@@ -22,6 +22,7 @@ import software.amazon.awssdk.services.iam.model.ServerCertificateMetadata;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -65,17 +66,17 @@ public class AwsCertificateReferenceResolver {
     public Optional<Certificate> resolve(ScanContext context, String certificateArn) {
         if (certificateArn == null || certificateArn.isBlank()) return Optional.empty();
 
-        Account account = context.getAccount();
-        String cacheKey = account.getId() + "|" + certificateArn;
+        Account account = context.account();
+        String cacheKey = account.id() + "|" + certificateArn;
         CacheEntry cached = cache.get(cacheKey);
         if (cached != null && cached.isFresh()) {
-            return Optional.ofNullable(cached.certificate()).map(AwsCertificateReferenceResolver::copyOf);
+            return Optional.ofNullable(cached.certificate()).map(AwsCertificateReferenceResolver::freshId);
         }
 
         Optional<Certificate> resolved = lookUp(account, certificateArn);
         if (cache.size() > CACHE_MAX_ENTRIES) cache.clear();
         cache.put(cacheKey, new CacheEntry(resolved.orElse(null), Instant.now().plus(CACHE_TTL)));
-        return resolved.map(AwsCertificateReferenceResolver::copyOf);
+        return resolved.map(AwsCertificateReferenceResolver::freshId);
     }
 
     private Optional<Certificate> lookUp(Account account, String arn) {
@@ -99,34 +100,34 @@ public class AwsCertificateReferenceResolver {
             CertificateDetail detail = acm.describeCertificate(
                     DescribeCertificateRequest.builder().certificateArn(arn).build()).certificate();
             Certificate certificate = fromAcmDetail(detail, account, region);
-            enrichWithAcmBody(acm, arn, certificate);
-            readAcmTags(acm, arn, certificate);
+            certificate = enrichWithAcmBody(acm, arn, certificate);
+            certificate = withAcmTags(acm, arn, certificate);
             return Optional.of(certificate);
         }
     }
 
     /** Maps an ACM CertificateDetail onto the domain model. Shared with the ACM strategy. */
     public Certificate fromAcmDetail(CertificateDetail detail, Account account, String region) {
-        Certificate certificate = new Certificate();
-        certificate.setId("cert-" + UUID.randomUUID());
-        certificate.setProvider(CloudProviderType.AWS.name());
-        certificate.setAccountId(account != null ? account.getId() : null);
-        certificate.setRegion(region != null ? region : AwsArns.regionOf(detail.certificateArn()));
-        certificate.setService("ACM");
-        certificate.setSourceType("IMPORTED".equalsIgnoreCase(detail.typeAsString()) ? "ACM_IMPORTED" : "ACM_MANAGED");
-        certificate.setDomain(detail.domainName());
-        certificate.setStatus(detail.statusAsString());
-        certificate.setSubject(detail.subject());
-        certificate.setIssuer(detail.issuer());
-        certificate.setSerialNumber(normaliseSerial(detail.serial()));
-        certificate.setAlgorithm(detail.keyAlgorithmAsString());
-        certificate.setKeySize(keySizeOf(detail.keyAlgorithmAsString()));
-        certificate.setIssuedDate(detail.notBefore());
-        certificate.setExpiryDate(detail.notAfter());
-        certificate.setResource(detail.certificateArn());
-        certificate.setAutoRenewal("AMAZON_ISSUED".equalsIgnoreCase(detail.typeAsString()));
-        certificate.setCreatedAt(Instant.now());
-        return certificate;
+        return Certificate.builder()
+                .id("cert-" + UUID.randomUUID())
+                .provider(CloudProviderType.AWS.name())
+                .accountId(account != null ? account.id() : null)
+                .region(region != null ? region : AwsArns.regionOf(detail.certificateArn()))
+                .service("ACM")
+                .sourceType("IMPORTED".equalsIgnoreCase(detail.typeAsString()) ? "ACM_IMPORTED" : "ACM_MANAGED")
+                .domain(detail.domainName())
+                .status(detail.statusAsString())
+                .subject(detail.subject())
+                .issuer(detail.issuer())
+                .serialNumber(normaliseSerial(detail.serial()))
+                .algorithm(detail.keyAlgorithmAsString())
+                .keySize(keySizeOf(detail.keyAlgorithmAsString()))
+                .issuedDate(detail.notBefore())
+                .expiryDate(detail.notAfter())
+                .resource(detail.certificateArn())
+                .autoRenewal("AMAZON_ISSUED".equalsIgnoreCase(detail.typeAsString()))
+                .createdAt(Instant.now())
+                .build();
     }
 
     /**
@@ -136,29 +137,38 @@ public class AwsCertificateReferenceResolver {
      * {@code acm:GetCertificate} is often not granted, and the serial number is a
      * workable fallback.
      */
-    private void enrichWithAcmBody(AcmClient acm, String arn, Certificate certificate) {
+    private Certificate enrichWithAcmBody(AcmClient acm, String arn, Certificate certificate) {
         try {
             String pem = acm.getCertificate(GetCertificateRequest.builder().certificateArn(arn).build()).certificate();
-            parser.leafOf(pem).ifPresent(parsed -> {
-                certificate.setFingerprint(parsed.getFingerprint());
-                if (certificate.getSubject() == null) certificate.setSubject(parsed.getSubject());
-                if (certificate.getIssuer() == null) certificate.setIssuer(parsed.getIssuer());
-                if (certificate.getKeySize() == null) certificate.setKeySize(parsed.getKeySize());
-            });
+            Optional<Certificate> parsed = parser.leafOf(pem);
+            if (parsed.isEmpty()) return certificate;
+
+            Certificate leaf = parsed.get();
+            return certificate.toBuilder()
+                    .fingerprint(leaf.fingerprint())
+                    .subject(certificate.subject() != null ? certificate.subject() : leaf.subject())
+                    .issuer(certificate.issuer() != null ? certificate.issuer() : leaf.issuer())
+                    .keySize(certificate.keySize() != null ? certificate.keySize() : leaf.keySize())
+                    .build();
         } catch (SdkException e) {
             log.debug("No certificate body available for {} ({}); falling back to the serial number for identity",
                     arn, e.getMessage());
+            return certificate;
         }
     }
 
-    private void readAcmTags(AcmClient acm, String arn, Certificate certificate) {
+    private Certificate withAcmTags(AcmClient acm, String arn, Certificate certificate) {
         try {
-            acm.listTagsForCertificate(ListTagsForCertificateRequest.builder().certificateArn(arn).build())
-               .tags()
-               .forEach(tag -> certificate.addTag(new ResourceTag(tag.key(), tag.value())));
+            List<ResourceTag> tags = acm.listTagsForCertificate(
+                    ListTagsForCertificateRequest.builder().certificateArn(arn).build())
+                .tags().stream()
+                .map(tag -> new ResourceTag(tag.key(), tag.value()))
+                .toList();
+            return certificate.withTags(tags);
         } catch (SdkException e) {
             // Tags are a nice-to-have; a missing acm:ListTagsForCertificate must not fail discovery.
             log.debug("Could not read tags for {}: {}", arn, e.getMessage());
+            return certificate;
         }
     }
 
@@ -183,24 +193,25 @@ public class AwsCertificateReferenceResolver {
     /** Public so the Phase 2 IAM strategy can reuse it when it enumerates all server certificates. */
     public Certificate fromIamServerCertificate(ServerCertificate serverCertificate, Account account) {
         ServerCertificateMetadata metadata = serverCertificate.serverCertificateMetadata();
-        Certificate certificate = parser.leafOf(serverCertificate.certificateBody())
-                .orElseGet(Certificate::new);
+        Certificate parsed = parser.leafOf(serverCertificate.certificateBody())
+                .orElseGet(() -> Certificate.builder().build());
 
-        certificate.setId("cert-" + UUID.randomUUID());
-        certificate.setProvider(CloudProviderType.AWS.name());
-        certificate.setAccountId(account != null ? account.getId() : null);
-        certificate.setRegion(IAM_REGION);
-        certificate.setService("IAM_SERVER_CERTIFICATE");
-        certificate.setSourceType("IAM_UPLOADED");
-        certificate.setResource(metadata.arn());
-        // IAM never renews anything for you - these always expire silently.
-        certificate.setAutoRenewal(false);
-        certificate.setCreatedAt(Instant.now());
-        if (certificate.getExpiryDate() == null) certificate.setExpiryDate(metadata.expiration());
-        if (certificate.getDomain() == null) certificate.setDomain(metadata.serverCertificateName());
-        if (certificate.getStatus() == null) certificate.setStatus("UNKNOWN");
-        certificate.addTag(new ResourceTag("iam:serverCertificateName", metadata.serverCertificateName()));
-        return certificate;
+        return parsed.toBuilder()
+                .id("cert-" + UUID.randomUUID())
+                .provider(CloudProviderType.AWS.name())
+                .accountId(account != null ? account.id() : null)
+                .region(IAM_REGION)
+                .service("IAM_SERVER_CERTIFICATE")
+                .sourceType("IAM_UPLOADED")
+                .resource(metadata.arn())
+                // IAM never renews anything for you - these always expire silently.
+                .autoRenewal(false)
+                .createdAt(Instant.now())
+                .expiryDate(parsed.expiryDate() != null ? parsed.expiryDate() : metadata.expiration())
+                .domain(parsed.domain() != null ? parsed.domain() : metadata.serverCertificateName())
+                .status(parsed.status() != null ? parsed.status() : "UNKNOWN")
+                .tag(new ResourceTag("iam:serverCertificateName", metadata.serverCertificateName()))
+                .build();
     }
 
     // --- fallbacks -----------------------------------------------------------
@@ -211,46 +222,29 @@ public class AwsCertificateReferenceResolver {
      * certificate we cannot read" is far more useful than omitting the listener.
      */
     public Certificate unresolved(ScanContext context, String arn, String service) {
-        Certificate certificate = new Certificate();
-        certificate.setId("cert-" + UUID.randomUUID());
-        certificate.setProvider(CloudProviderType.AWS.name());
-        certificate.setAccountId(context.getAccount() != null ? context.getAccount().getId() : null);
-        certificate.setRegion(AwsArns.regionOf(arn) != null ? AwsArns.regionOf(arn) : context.getRegion());
-        certificate.setService(service);
-        certificate.setSourceType("REFERENCE_ONLY");
-        certificate.setResource(arn);
-        certificate.setDomain(AwsArns.lastSegmentOf(arn));
-        certificate.setStatus("UNRESOLVED");
-        certificate.setCreatedAt(Instant.now());
-        return certificate;
+        return Certificate.builder()
+                .id("cert-" + UUID.randomUUID())
+                .provider(CloudProviderType.AWS.name())
+                .accountId(context.accountId())
+                .region(AwsArns.regionOf(arn) != null ? AwsArns.regionOf(arn) : context.region())
+                .service(service)
+                .sourceType("REFERENCE_ONLY")
+                .resource(arn)
+                .domain(AwsArns.lastSegmentOf(arn))
+                .status("UNRESOLVED")
+                .createdAt(Instant.now())
+                .build();
     }
 
     // --- helpers -------------------------------------------------------------
 
-    /** Cached entries are handed out as copies so a caller's usages do not leak into the cache. */
-    private static Certificate copyOf(Certificate source) {
-        Certificate copy = new Certificate();
-        copy.setId("cert-" + UUID.randomUUID());
-        copy.setProvider(source.getProvider());
-        copy.setAccountId(source.getAccountId());
-        copy.setRegion(source.getRegion());
-        copy.setService(source.getService());
-        copy.setSourceType(source.getSourceType());
-        copy.setDomain(source.getDomain());
-        copy.setStatus(source.getStatus());
-        copy.setSubject(source.getSubject());
-        copy.setIssuer(source.getIssuer());
-        copy.setSerialNumber(source.getSerialNumber());
-        copy.setFingerprint(source.getFingerprint());
-        copy.setAlgorithm(source.getAlgorithm());
-        copy.setKeySize(source.getKeySize());
-        copy.setIssuedDate(source.getIssuedDate());
-        copy.setExpiryDate(source.getExpiryDate());
-        copy.setResource(source.getResource());
-        copy.setAutoRenewal(source.getAutoRenewal());
-        copy.setCreatedAt(source.getCreatedAt());
-        source.getTags().forEach(copy::addTag);
-        return copy;
+    /**
+     * The cached certificate is immutable, so it can be shared freely; only the id
+     * is regenerated, keeping each reference to a shared certificate distinguishable
+     * until the deduplicator folds them together.
+     */
+    private static Certificate freshId(Certificate source) {
+        return source.withId("cert-" + UUID.randomUUID());
     }
 
     private static String normaliseSerial(String serial) {

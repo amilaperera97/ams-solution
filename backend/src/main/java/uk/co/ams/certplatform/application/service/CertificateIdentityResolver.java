@@ -21,34 +21,37 @@ public class CertificateIdentityResolver {
         Map<String, Certificate> uniqueCerts = new LinkedHashMap<>();
 
         for (Certificate cert : discoveredCertificates) {
-            String identity = determineIdentity(cert);
-            
-            if (uniqueCerts.containsKey(identity)) {
-                Certificate existing = uniqueCerts.get(identity);
-                // Merge usages
-                for (CertificateUsage usage : cert.getUsages()) {
-                    existing.addUsage(usage);
-                }
-                // Merge tags (simple approach: just add all, although deduplication might be needed)
-                for (ResourceTag tag : cert.getTags()) {
-                    existing.addTag(tag);
-                }
-            } else {
-                uniqueCerts.put(identity, cert);
-            }
+            uniqueCerts.merge(determineIdentity(cert), cert, CertificateIdentityResolver::combine);
         }
-        
+
         return new ArrayList<>(uniqueCerts.values());
     }
 
+    /**
+     * Folds a duplicate into the certificate already held for that identity: the
+     * canonical one keeps its own fields and gains the duplicate's usages and tags,
+     * which is what turns "the same certificate on four load balancers" into one
+     * row with four usages.
+     */
+    private static Certificate combine(Certificate canonical, Certificate duplicate) {
+        List<CertificateUsage> usages = new ArrayList<>(canonical.usages());
+        usages.addAll(duplicate.usages());
+
+        // Simple approach: just add all, although deduplication might be needed.
+        List<ResourceTag> tags = new ArrayList<>(canonical.tags());
+        tags.addAll(duplicate.tags());
+
+        return canonical.toBuilder().usages(usages).tags(tags).build();
+    }
+
     private String determineIdentity(Certificate cert) {
-        if (cert.getFingerprint() != null && !cert.getFingerprint().isBlank()) {
-            return "FINGERPRINT:" + cert.getFingerprint();
+        if (cert.fingerprint() != null && !cert.fingerprint().isBlank()) {
+            return "FINGERPRINT:" + cert.fingerprint();
         }
-        if (cert.getSerialNumber() != null && !cert.getSerialNumber().isBlank()) {
-            return "SERIAL:" + cert.getSerialNumber();
+        if (cert.serialNumber() != null && !cert.serialNumber().isBlank()) {
+            return "SERIAL:" + cert.serialNumber();
         }
         // Fallback to domain + provider + account if no unique cryptograph identifier is present
-        return "FALLBACK:" + cert.getDomain() + ":" + cert.getProvider() + ":" + cert.getAccountId();
+        return "FALLBACK:" + cert.domain() + ":" + cert.provider() + ":" + cert.accountId();
     }
 }
